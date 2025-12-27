@@ -13,9 +13,9 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStateMixin {
+class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProviderStateMixin
   late UserProfile displayUser;
-  late TabController _tabController;
+  // Removed TabController
   
   // Controllers
   late TextEditingController _bioController;
@@ -26,13 +26,14 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
   bool _isEditing = false;
   bool _isCurrentUser = false;
   List<String> _editingSkills = [];
+  int _selectedTabIndex = 0; // Added state for tab selection
 
   @override
   void initState() {
     super.initState();
     displayUser = widget.user ?? currentUser;
     _isCurrentUser = displayUser.id == currentUser.id;
-    _tabController = TabController(length: 2, vsync: this);
+    // Removed TabController initialization
     
     _bioController = TextEditingController(text: displayUser.bio);
     _fullNameController = TextEditingController(text: displayUser.fullName);
@@ -47,7 +48,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     _fullNameController.dispose();
     _semesterController.dispose();
     _skillInputController.dispose();
-    _tabController.dispose();
+    // Removed TabController disposal
     super.dispose();
   }
 
@@ -108,39 +109,82 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     }
   }
 
-  void _showFollowers() {
-    if (!_isCurrentUser) return; // Only owner sees list per prompt "person being followed can see"
+  void _showBioEditorDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        title: const Text("Followers", style: TextStyle(color: Colors.white)),
-        content: SizedBox(
-          width: 300,
-          height: 300,
-          child: displayUser.followers.isEmpty 
-            ? const Center(child: Text("No followers yet", style: TextStyle(color: Colors.grey)))
-            : ListView.builder(
-                itemCount: displayUser.followers.length,
-                itemBuilder: (context, index) {
-                  return FutureBuilder<UserProfile?>(
-                    future: DatabaseService().getUserProfile(displayUser.followers[index]),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) return const SizedBox();
-                      final u = snapshot.data!;
-                      return ListTile(
-                        leading: const CircleAvatar(backgroundColor: Colors.redAccent, child: Icon(Icons.person)),
-                        title: Text(u.fullName, style: const TextStyle(color: Colors.white)),
-                        subtitle: Text("@${u.username}", style: const TextStyle(color: Colors.grey)),
-                      );
-                    },
-                  );
-                },
+      barrierColor: Colors.black.withValues(alpha: 0.2),
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+          title: const Text("Edit Bio", style: TextStyle(color: Colors.white)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: TextField(
+              controller: _bioController,
+              maxLength: 250,
+              maxLines: 10,
+              minLines: 5,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: "Tell us about yourself...",
+                hintStyle: const TextStyle(color: Colors.grey),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(kAppCornerRadius),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(kAppCornerRadius),
+                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(kAppCornerRadius),
+                  borderSide: const BorderSide(color: Colors.redAccent),
+                ),
+                filled: true,
+                fillColor: Colors.black.withValues(alpha: 0.2),
               ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                setState(() {}); // Refresh main UI
+                Navigator.pop(context);
+              },
+              child: const Text("Done", style: TextStyle(color: Colors.redAccent)),
+            )
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))
-        ],
+      ),
+    );
+  }
+
+  Widget _buildTabButton(int index, String text) {
+    final bool isActive = _selectedTabIndex == index;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _selectedTabIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: isActive ? Colors.redAccent : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isActive ? Colors.white : Colors.white54,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -152,8 +196,9 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text('@${displayUser.username}', style: textTheme.titleMedium),
-        backgroundColor: Colors.transparent,
+        title: Text('Profile', style: textTheme.titleMedium),
+        backgroundColor: const Color.fromARGB(255, 43, 0, 0),
+        centerTitle: true,
         elevation: 0,
         actions: [
           if (_isCurrentUser)
@@ -263,7 +308,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                   const CircleAvatar(
                                     radius: 60,
                                     backgroundColor: Colors.redAccent,
-                                    child: Icon(Icons.person, size: 40, color: Colors.white),
+                                    child: Icon(Icons.person_4, size: 40, color: Colors.white),
                                   ),
                                   const SizedBox(height: 16),
                                   _isEditing
@@ -285,7 +330,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                   const SizedBox(height: 4),
                                   Text(
                                     "@${displayUser.username}",
-                                    style: textTheme.bodySmall?.copyWith(color: Colors.grey),
+                                    style: textTheme.bodyMedium?.copyWith(color: Colors.grey),
                                   ),
                                   const SizedBox(height: 12),
                                   if (!_isCurrentUser)
@@ -297,11 +342,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                       ),
                                       child: Text(currentUser.following.contains(displayUser.id) ? "Unfollow" : "Follow", style: const TextStyle(color: Colors.white)),
                                     ),
-                                  if (_isCurrentUser)
-                                    TextButton(
-                                      onPressed: _showFollowers,
-                                      child: Text("${displayUser.followers.length} Followers", style: const TextStyle(color: Colors.white70)),
-                                    )
                                 ],
                               ),
                             ),
@@ -318,10 +358,13 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                   _isEditing
                                       ? TextField(
                                           controller: _bioController,
+                                          readOnly: true,
+                                          onTap: _showBioEditorDialog,
                                           decoration: const InputDecoration(
-                                            labelText: 'Bio',
+                                            labelText: 'Bio (Tap to edit)',
                                             border: OutlineInputBorder(),
                                             isDense: true,
+                                            suffixIcon: Icon(Icons.open_in_full, size: 16),
                                           ),
                                           maxLines: 3,
                                           style: textTheme.bodyMedium,
@@ -345,7 +388,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                           child: TextField(
                                             controller: _semesterController,
                                             decoration: InputDecoration(
-                                              labelText: "Sem",
+                                              labelText: "Semester",
                                               isDense: true,
                                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
                                             ),
@@ -358,7 +401,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                             color: Colors.white.withValues(alpha: 0.05),
                                             borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
                                           ),
-                                          child: Text("Sem ${displayUser.currentSemester}", style: textTheme.bodySmall),
+                                          child: Text("Semester ${displayUser.currentSemester}", style: textTheme.bodySmall),
                                         ),
                                       
                                       if (displayUser.openToCollaborate)
@@ -374,7 +417,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                                             children: [
                                               const Icon(Icons.handshake, size: 12, color: Colors.greenAccent),
                                               const SizedBox(width: 4),
-                                              Text("Open to Collab", style: textTheme.bodySmall?.copyWith(color: Colors.greenAccent)),
+                                              Text("Open to Collaborate", style: textTheme.bodySmall?.copyWith(color: Colors.greenAccent)),
                                             ],
                                           ),
                                         ),
@@ -428,45 +471,33 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                       
                       // Tabs for Posts / Saved
                       if (_isCurrentUser)
-                        TabBar(
-                          controller: _tabController,
-                          indicatorColor: Colors.redAccent,
-                          tabs: const [
-                            Tab(text: "My Posts"),
-                            Tab(text: "Saved"),
+                        Row(
+                          children: [
+                            _buildTabButton(0, "My Posts"),
+                            _buildTabButton(1, "Saved"),
                           ],
                         ),
                       
                       const SizedBox(height: 16),
                       
-                      // Content based on Tab (Manual implementation since we are inside SingleChildScrollView)
-                      AnimatedBuilder(
-                        animation: _tabController,
-                        builder: (context, _) {
-                          if (_isCurrentUser && _tabController.index == 1) {
-                            // Saved Posts
-                            return StreamBuilder<List<Post>>(
-                              stream: DatabaseService().getSavedPostsStream(displayUser.savedPostIds),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
-                                final posts = snapshot.data ?? [];
-                                if (posts.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("No saved posts.")));
-                                return Column(children: posts.map((p) => PostWidget(post: p)).toList());
-                              },
-                            );
-                          } else {
-                            // User Posts
-                            return StreamBuilder<List<Post>>(
-                              stream: DatabaseService().getUserPostsStream(displayUser.id),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
-                                final posts = snapshot.data ?? [];
-                                if (posts.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("No posts yet.")));
-                                return Column(children: posts.map((p) => PostWidget(post: p)).toList());
-                              },
-                            );
-                          }
+                      // Content based on Tab
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 400),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (Widget child, Animation<double> animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: SlideTransition(
+                              position: Tween<Offset>(
+                                begin: const Offset(0.0, 0.02),
+                                end: Offset.zero,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                          );
                         },
+                        child: _buildPostList(),
                       ),
                     ],
                   ),
@@ -477,5 +508,33 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         ],
       ),
     );
+  }
+
+  Widget _buildPostList() {
+    if (_isCurrentUser && _selectedTabIndex == 1) {
+      // Saved Posts
+      return StreamBuilder<List<Post>>(
+        key: const ValueKey('saved'),
+        stream: DatabaseService().getSavedPostsStream(displayUser.savedPostIds),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
+          final posts = snapshot.data ?? [];
+          if (posts.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("No saved posts.")));
+          return Column(children: posts.map((p) => PostWidget(post: p)).toList());
+        },
+      );
+    } else {
+      // User Posts
+      return StreamBuilder<List<Post>>(
+        key: const ValueKey('posts'),
+        stream: DatabaseService().getUserPostsStream(displayUser.id),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
+          final posts = snapshot.data ?? [];
+          if (posts.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("No posts yet.")));
+          return Column(children: posts.map((p) => PostWidget(post: p)).toList());
+        },
+      );
+    }
   }
 }

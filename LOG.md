@@ -3,3 +3,10 @@
 - Set up the flutter project. Connected it to a Firebase project.
 - Implemented core features like the feed page and user profiles.
 - Connected the app to Firestore to store user and post data.
+- Initialised git and connected to GitHub repository.
+
+2025-12-27:
+- Implemented server-side pagination for better performance and long feeds.
+- Personalised the sign-in/sign-up page to show the brand.
+- Modified the Profile page screen.
+- Used AnimatedSwitcher to make transitions smoother.

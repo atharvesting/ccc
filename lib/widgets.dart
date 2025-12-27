@@ -64,13 +64,13 @@ class GlassyContainer extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        filter: ImageFilter.blur(sigmaX: 1, sigmaY: 1),
         child: Container(
           padding: EdgeInsets.all(padding),
           decoration: BoxDecoration(
             color: Colors.red.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-            border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
           ),
           child: child,
         ),

@@ -52,39 +52,17 @@ class AuthPage extends StatelessWidget {
             child: Container(color: Colors.transparent),
           ),
           // 4. Auth Screen Content
-          Theme(
-            data: Theme.of(context).copyWith(
-              scaffoldBackgroundColor: Colors.transparent, // Make SignInScreen transparent
-              inputDecorationTheme: InputDecorationTheme(
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.05),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-                  borderSide: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-                  borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-                ),
-              ),
-            ),
-            child: SignInScreen(
-              providers: [
-                EmailAuthProvider(),
-              ],
-              actions: [
-                AuthStateChangeAction<SignedIn>((context, state) {}),
-                AuthStateChangeAction<UserCreated>((context, state) {}),
-              ],
-              headerBuilder: (context, constraints, shrinkOffset) {
-                return Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+          SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 20),
+                // Branding Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Row(
                     children: [
-                      const SizedBox(height: 40),
                       Container(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.redAccent.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
@@ -97,39 +75,76 @@ class AuthPage extends StatelessWidget {
                             )
                           ]
                         ),
-                        child: const Icon(Icons.code, size: 60, color: Colors.white),
+                        child: const Text("< < <", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
                       ),
-                      const SizedBox(height: 20),
-                      Text(
-                        "CS Daily Progress",
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 1.2,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "collegeCodingCulture",
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 1.0,
+                                  ),
                             ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Share your journey. Inspire others.",
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white70,
+                            const SizedBox(height: 4),
+                            Text(
+                              "Share your journey. Grow with others.",
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.white70,
+                                  ),
                             ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                );
-              },
-              subtitleBuilder: (context, action) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Text(
-                    action == AuthAction.signIn
-                        ? 'Welcome back!'
-                        : 'Join the community of CS students.',
-                    style: const TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 20),
+                // Sign In Form
+                Expanded(
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      scaffoldBackgroundColor: Colors.transparent, // Make SignInScreen transparent
+                      inputDecorationTheme: InputDecorationTheme(
+                        filled: true,
+                        fillColor: Colors.white.withValues(alpha: 0.05),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
+                          borderSide: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
+                          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+                        ),
+                      ),
+                    ),
+                    child: SignInScreen(
+                      providers: [
+                        EmailAuthProvider(),
+                      ],
+                      actions: [
+                        AuthStateChangeAction<SignedIn>((context, state) {}),
+                        AuthStateChangeAction<UserCreated>((context, state) {}),
+                      ],
+                      subtitleBuilder: (context, action) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Text(
+                            action == AuthAction.signIn
+                                ? 'Welcome back!'
+                                : 'Join the community of CS students.',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
           ),
         ],

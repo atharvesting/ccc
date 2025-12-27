@@ -16,34 +16,21 @@ class FeedPage extends StatefulWidget {
   State<FeedPage> createState() => _FeedPageState();
 }
 
-class _FeedPageState extends State<FeedPage> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _FeedPageState extends State<FeedPage> {
+  int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(_handleTabSelection);
-  }
-
-  void _handleTabSelection() {
-    if (_tabController.indexIsChanging || _tabController.animation!.value == _tabController.index) {
-      setState(() {});
-    }
-  }
-
-  @override
-  void dispose() {
-    _tabController.removeListener(_handleTabSelection);
-    _tabController.dispose();
-    super.dispose();
   }
 
   Widget _buildFeedButton(int index, String text) {
-    final bool isActive = _tabController.index == index;
+    final bool isActive = _selectedIndex == index;
     return TextButton(
       onPressed: () {
-        _tabController.animateTo(index);
+        setState(() {
+          _selectedIndex = index;
+        });
       },
       style: TextButton.styleFrom(
         foregroundColor: isActive ? Colors.redAccent : Colors.white54,
@@ -247,62 +234,33 @@ class _FeedPageState extends State<FeedPage> with SingleTickerProviderStateMixin
 
                   // Feed List
                   Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        // Global Feed
-                        StreamBuilder<List<Post>>(
-                          stream: DatabaseService().getPostsStream(),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
-                            }
-
-                            if (snapshot.hasError) {
-                              return Center(child: Text("Error: ${snapshot.error}"));
-                            }
-
-                            final posts = snapshot.data ?? [];
-
-                            if (posts.isEmpty) {
-                              return const Center(child: Text("No updates yet. Be the first!"));
-                            }
-
-                            return ListView.builder(
-                              padding: const EdgeInsets.only(top: 8, bottom: 20),
-                              itemCount: posts.length,
-                              itemBuilder: (context, index) {
-                                return PostWidget(post: posts[index]);
-                              },
-                            );
-                          },
-                        ),
-                        // Following Feed
-                        StreamBuilder<List<Post>>(
-                          stream: DatabaseService().getPostsStream(), // Fetch all and filter
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
-                            }
-
-                            final allPosts = snapshot.data ?? [];
-                            // Filter posts where userId is in currentUser.following
-                            final followingPosts = allPosts.where((p) => currentUser.following.contains(p.userId)).toList();
-                            
-                            if (followingPosts.isEmpty) {
-                              return const Center(child: Text("You aren't following anyone yet, or they haven't posted."));
-                            }
-
-                            return ListView.builder(
-                              padding: const EdgeInsets.only(top: 8, bottom: 20),
-                              itemCount: followingPosts.length,
-                              itemBuilder: (context, index) {
-                                return PostWidget(post: followingPosts[index]);
-                              },
-                            );
-                          },
-                        ),
-                      ],
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 400),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (Widget child, Animation<double> animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0.0, 0.02),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: _selectedIndex == 0
+                          ? PaginatedFeedList(
+                              key: const ValueKey('global'),
+                              fetchFunction: (lastPost) => DatabaseService().getGlobalPosts(limit: 10, lastPost: lastPost),
+                              emptyMessage: "No updates yet. Be the first!",
+                            )
+                          : PaginatedFeedList(
+                              key: const ValueKey('following'),
+                              fetchFunction: (lastPost) => DatabaseService().getFollowingPosts(currentUser.following, limit: 10, lastPost: lastPost),
+                              emptyMessage: "You aren't following anyone yet, or they haven't posted.",
+                            ),
                     ),
                   ),
                 ],
@@ -310,6 +268,105 @@ class _FeedPageState extends State<FeedPage> with SingleTickerProviderStateMixin
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class PaginatedFeedList extends StatefulWidget {
+  final Future<List<Post>> Function(Post? lastPost) fetchFunction;
+  final String emptyMessage;
+
+  const PaginatedFeedList({
+    super.key,
+    required this.fetchFunction,
+    required this.emptyMessage,
+  });
+
+  @override
+  State<PaginatedFeedList> createState() => _PaginatedFeedListState();
+}
+
+class _PaginatedFeedListState extends State<PaginatedFeedList> {
+  final List<Post> _posts = [];
+  bool _isLoading = false;
+  bool _hasMore = true;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoading &&
+        _hasMore) {
+      _loadPosts();
+    }
+  }
+
+  Future<void> _loadPosts() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final newPosts = await widget.fetchFunction(_posts.isNotEmpty ? _posts.last : null);
+      setState(() {
+        _posts.addAll(newPosts);
+        _isLoading = false;
+        if (newPosts.length < 10) {
+          _hasMore = false;
+        }
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      // Handle error gracefully
+    }
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _posts.clear();
+      _hasMore = true;
+    });
+    await _loadPosts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_posts.isEmpty && _isLoading) {
+      return const Center(child: CircularProgressIndicator(color: Colors.redAccent));
+    }
+
+    if (_posts.isEmpty && !_isLoading) {
+      return Center(child: Text(widget.emptyMessage));
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      color: Colors.redAccent,
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.only(top: 8, bottom: 20),
+        itemCount: _posts.length + (_hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _posts.length) {
+            return const Center(child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: CircularProgressIndicator(color: Colors.redAccent),
+            ));
+          }
+          return PostWidget(post: _posts[index]);
+        },
       ),
     );
   }

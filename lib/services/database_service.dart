@@ -99,6 +99,44 @@ class DatabaseService {
     await _db.collection('posts').add(post.toMap());
   }
 
+  // Scalable Pagination: Global Feed
+  Future<List<Post>> getGlobalPosts({int limit = 10, Post? lastPost}) async {
+    var query = _db
+        .collection('posts')
+        .orderBy('timestamp', descending: true)
+        .limit(limit);
+
+    if (lastPost != null) {
+      query = query.startAfter([lastPost.timestamp]);
+    }
+
+    final snapshot = await query.get();
+    return snapshot.docs.map((doc) => Post.fromMap(doc.id, doc.data())).toList();
+  }
+
+  // Scalable Pagination: Following Feed
+  // Note: Firestore 'whereIn' is limited to 30 values. 
+  // For production with >30 following, you need a different strategy (e.g. Fan-out).
+  Future<List<Post>> getFollowingPosts(List<String> followingIds, {int limit = 10, Post? lastPost}) async {
+    if (followingIds.isEmpty) return [];
+
+    // Take first 30 to avoid crash. 
+    final safeIds = followingIds.take(30).toList();
+
+    var query = _db
+        .collection('posts')
+        .where('userId', whereIn: safeIds)
+        .orderBy('timestamp', descending: true)
+        .limit(limit);
+
+    if (lastPost != null) {
+      query = query.startAfter([lastPost.timestamp]);
+    }
+
+    final snapshot = await query.get();
+    return snapshot.docs.map((doc) => Post.fromMap(doc.id, doc.data())).toList();
+  }
+
   Stream<List<Post>> getPostsStream() {
     return _db
         .collection('posts')
