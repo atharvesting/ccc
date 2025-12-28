@@ -51,7 +51,7 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
 
     try {
       await DatabaseService().createPost(newPost);
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context, true); // Return true on success
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {

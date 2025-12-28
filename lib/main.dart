@@ -23,6 +23,9 @@ void main() async {
     // Catch initialization errors (like missing web configuration)
     runApp(ErrorApp(error: e.toString()));
   }
+
+  const isWasm = bool.fromEnvironment('dart.tool.dart2wasm');
+  print('*** WASM CHECK: $isWasm ***');
 }
 
 class ErrorApp extends StatelessWidget {
@@ -88,7 +91,7 @@ class CccApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'CS Daily Progress',
+      title: 'College Coding Culture',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const MaterialScrollBehavior().copyWith(
         physics: const BouncingScrollPhysics(),
@@ -120,8 +123,16 @@ class CccApp extends StatelessWidget {
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  Future<UserProfile?>? _profileFuture;
+  String? _lastUid;
 
   @override
   Widget build(BuildContext context) {
@@ -129,15 +140,24 @@ class AuthGate extends StatelessWidget {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-           return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.redAccent)));
+          return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.redAccent)));
         }
 
-        if (!snapshot.hasData) {
+        final user = snapshot.data;
+        if (user == null) {
+          _lastUid = null;
+          _profileFuture = null;
           return const AuthPage();
         }
 
+        // ONLY trigger the database call if the User ID has actually changed
+        if (user.uid != _lastUid) {
+          _lastUid = user.uid;
+          _profileFuture = DatabaseService().getUserProfile(user.uid);
+        }
+
         return FutureBuilder<UserProfile?>(
-          future: DatabaseService().getUserProfile(snapshot.data!.uid),
+          future: _profileFuture, // Use the cached future
           builder: (context, profileSnapshot) {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.redAccent)));

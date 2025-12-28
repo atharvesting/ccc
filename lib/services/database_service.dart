@@ -4,6 +4,56 @@ import '../models.dart';
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  // HARDCODED ADMIN UID (Fallback)
+  static const String _fallbackAdminUid = "aLYyefw5aCNwhrB5VHzCphBbgJv1"; 
+
+  // Helper to check if a user is admin (Now Async to support transfer)
+  Future<bool> isAdmin(String uid) async {
+    try {
+      final doc = await _db.collection('metadata').doc('admin').get();
+      if (doc.exists && doc.data() != null && doc.data()!.containsKey('uid')) {
+        return doc.data()!['uid'] == uid;
+      }
+    } catch (e) {
+      print("Error checking admin status: $e");
+    }
+    return uid == _fallbackAdminUid;
+  }
+
+  Future<void> transferAdminRights(String newAdminUid) async {
+    await _db.collection('metadata').doc('admin').set({'uid': newAdminUid});
+  }
+
+  // --- Admin Features ---
+
+  Future<void> deletePostAsAdmin(String postId) async {
+    // In a real app, you'd check auth.currentUser.uid == adminUid here or via Security Rules
+    await _db.collection('posts').doc(postId).delete();
+  }
+
+  Future<void> deleteUserAsAdmin(String targetUserId) async {
+    // 1. Delete User Document
+    await _db.collection('users').doc(targetUserId).delete();
+
+    // 2. Delete all posts by this user
+    final postsQuery = await _db.collection('posts').where('userId', isEqualTo: targetUserId).get();
+    final batch = _db.batch();
+    for (var doc in postsQuery.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
+  Future<void> createAnnouncement(Post post) async {
+    // Force the type to be announcement if not already
+    // You might need to add a 'type' field to your Post model, 
+    // or just use a specific flag in the map.
+    Map<String, dynamic> data = post.toMap();
+    data['isAnnouncement'] = true; 
+    
+    await _db.collection('posts').add(data);
+  }
+
   // --- Users ---
 
   Future<void> createUserProfile(UserProfile user) async {
@@ -121,7 +171,7 @@ class DatabaseService {
     if (followingIds.isEmpty) return [];
 
     // Take first 30 to avoid crash. 
-    final safeIds = followingIds.take(30).toList();
+    final safeIds = followingIds.take(8).toList();
 
     var query = _db
         .collection('posts')

@@ -10,3 +10,5 @@
 - Personalised the sign-in/sign-up page to show the brand.
 - Modified the Profile page screen.
 - Used AnimatedSwitcher to make transitions smoother.
+- Deployed the app successfully and diagnosed performance.
+- Made performance improvements.

@@ -8,6 +8,8 @@ import '../widgets.dart';
 import 'profile_page.dart';
 import 'create_post_page.dart';
 import 'search_page.dart';
+import 'admin_page.dart'; // <--- IMPORT ADDED HERE
+import 'package:flutter/gestures.dart'; // Import for PointerScrollEvent
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -18,10 +20,72 @@ class FeedPage extends StatefulWidget {
 
 class _FeedPageState extends State<FeedPage> {
   int _selectedIndex = 0;
+  bool _isAdmin = false; // Added state variable
+  int _refreshCounter = 0; // Added to trigger feed refresh
+
+  // Optimization: Move complex object creation out of build method to save CPU cycles
+  late final List<Shadow> _titleShadows;
+  late final BoxDecoration _circleDecoration1;
+  late final BoxDecoration _circleDecoration2;
+  
+  static final Tween<Offset> _slideTween = Tween<Offset>(
+    begin: const Offset(0.0, 0.02),
+    end: Offset.zero,
+  );
 
   @override
   void initState() {
     super.initState();
+    _checkAdminStatus(); // Trigger async check
+
+    // Initialize styles once to avoid recreation on every build
+    _titleShadows = [
+      const Shadow(
+        blurRadius: 30.0,
+        color: Colors.redAccent,
+        offset: Offset(0, 0),
+      ),
+      Shadow(
+        blurRadius: 30.0,
+        color: Colors.red.withValues(alpha: 0.6),
+        offset: const Offset(0, 0),
+      ),
+    ];
+
+    // Optimization: Use BoxShadow for blur instead of ImageFiltered.
+    // ImageFiltered with high sigma is very expensive and causes choppy scrolling.
+    _circleDecoration1 = BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.redAccent.withValues(alpha: 0),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.redAccent.withValues(alpha: 0.2),
+          blurRadius: 100, // Simulates the blur effect cheaply
+          spreadRadius: 10,
+        ),
+      ],
+    );
+
+    _circleDecoration2 = BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.red.withValues(alpha: 0),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.red.withValues(alpha: 0.2),
+          blurRadius: 100, // Simulates the blur effect cheaply
+          spreadRadius: 10,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await DatabaseService().isAdmin(currentUser.id);
+    if (mounted) {
+      setState(() {
+        _isAdmin = isAdmin;
+      });
+    }
   }
 
   Widget _buildFeedButton(int index, String text) {
@@ -48,38 +112,39 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) { // Removed Future and async
     return Scaffold(
       extendBodyBehindAppBar: true, // Allow body to show behind AppBar
+      // --- ADDED FLOATING ACTION BUTTON FOR ADMIN ---
+      floatingActionButton: _isAdmin // Use the state variable
+          ? FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AdminPage()),
+                );
+              },
+              backgroundColor: Colors.red[1],
+              tooltip: 'Admin Console',
+              child: const Icon(Icons.admin_panel_settings, color: Colors.black),
+            )
+          : null,
+      // ----------------------------------------------
+
       appBar: AppBar(
         title: Text(
           '< < <',
           style: TextStyle(
             fontSize: 40,
             fontWeight: FontWeight.bold,
-            shadows: [
-              const Shadow(
-                blurRadius: 30.0,
-                color: Colors.redAccent,
-                offset: Offset(0, 0),
-              ),
-              Shadow(
-                blurRadius: 30.0,
-                color: Colors.red.withValues(alpha: 0.6),
-                offset: const Offset(0, 0),
-              ),
-            ],
+            shadows: _titleShadows, // Use pre-initialized shadows
           ),
         ),
+        scrolledUnderElevation: 0,
         backgroundColor: Colors.transparent, // Glassy effect handled by body stack
         elevation: 0,
         centerTitle: true,
-        flexibleSpace: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(color: Colors.black.withValues(alpha: 0.2)),
-          ),
-        ),
+        // flexibleSpace: Container(color: Colors.black),
         // Removed bottom TabBar
         actions: [
           IconButton(
@@ -127,35 +192,23 @@ class _FeedPageState extends State<FeedPage> {
               ),
             ),
           ),
-          // 2. Decorative Circles - Blurred AF
+          // 2. Decorative Circles - Optimized
           Positioned(
             top: -100,
             right: -100,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.redAccent.withValues(alpha: 0.2),
-                ),
-              ),
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: _circleDecoration1,
             ),
           ),
           Positioned(
             bottom: 100,
             left: -50,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.red.withValues(alpha: 0.15),
-                ),
-              ),
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: _circleDecoration2,
             ),
           ),
           // 3. Content
@@ -164,7 +217,7 @@ class _FeedPageState extends State<FeedPage> {
               constraints: const BoxConstraints(maxWidth: 800),
               child: Column(
                 children: [
-                  const SizedBox(height: kToolbarHeight + 20),
+                  const SizedBox(height: kToolbarHeight + 10),
                   
                   // Custom Feed Switcher
                   Padding(
@@ -183,8 +236,8 @@ class _FeedPageState extends State<FeedPage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     child: GestureDetector(
-                      onTap: () {
-                        showGeneralDialog(
+                      onTap: () async {
+                        final result = await showGeneralDialog(
                           context: context,
                           barrierDismissible: true,
                           barrierLabel: 'Dismiss',
@@ -212,6 +265,13 @@ class _FeedPageState extends State<FeedPage> {
                             );
                           },
                         );
+
+                        // If post was created successfully, refresh the feed
+                        if (result == true) {
+                          setState(() {
+                            _refreshCounter++;
+                          });
+                        }
                       },
                       child: GlassyContainer(
                         padding: 12.0,
@@ -242,24 +302,23 @@ class _FeedPageState extends State<FeedPage> {
                         return FadeTransition(
                           opacity: animation,
                           child: SlideTransition(
-                            position: Tween<Offset>(
-                              begin: const Offset(0.0, 0.02),
-                              end: Offset.zero,
-                            ).animate(animation),
+                            position: _slideTween.animate(animation), // Use static tween
                             child: child,
                           ),
                         );
                       },
                       child: _selectedIndex == 0
                           ? PaginatedFeedList(
-                              key: const ValueKey('global'),
-                              fetchFunction: (lastPost) => DatabaseService().getGlobalPosts(limit: 10, lastPost: lastPost),
+                              key: ValueKey('global_$_refreshCounter'), // Update key to force refresh
+                              fetchFunction: (lastPost) => DatabaseService().getGlobalPosts(limit: 9, lastPost: lastPost),
                               emptyMessage: "No updates yet. Be the first!",
+                              pageSize: 9, // Pass the correct limit
                             )
                           : PaginatedFeedList(
-                              key: const ValueKey('following'),
-                              fetchFunction: (lastPost) => DatabaseService().getFollowingPosts(currentUser.following, limit: 10, lastPost: lastPost),
+                              key: ValueKey('following_$_refreshCounter'), // Update key to force refresh
+                              fetchFunction: (lastPost) => DatabaseService().getFollowingPosts(currentUser.following, limit: 8, lastPost: lastPost),
                               emptyMessage: "You aren't following anyone yet, or they haven't posted.",
+                              pageSize: 8, // Pass the correct limit
                             ),
                     ),
                   ),
@@ -276,11 +335,13 @@ class _FeedPageState extends State<FeedPage> {
 class PaginatedFeedList extends StatefulWidget {
   final Future<List<Post>> Function(Post? lastPost) fetchFunction;
   final String emptyMessage;
+  final int pageSize; // Added parameter to handle dynamic limits
 
   const PaginatedFeedList({
     super.key,
     required this.fetchFunction,
     required this.emptyMessage,
+    this.pageSize = 10, // Default value
   });
 
   @override
@@ -323,7 +384,8 @@ class _PaginatedFeedListState extends State<PaginatedFeedList> {
       setState(() {
         _posts.addAll(newPosts);
         _isLoading = false;
-        if (newPosts.length < 10) {
+        // Fix: Check against the configured pageSize, not hardcoded 10
+        if (newPosts.length < widget.pageSize) {
           _hasMore = false;
         }
       });
@@ -351,23 +413,41 @@ class _PaginatedFeedListState extends State<PaginatedFeedList> {
       return Center(child: Text(widget.emptyMessage));
     }
 
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      color: Colors.redAccent,
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.only(top: 8, bottom: 20),
-        itemCount: _posts.length + (_hasMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _posts.length) {
-            return const Center(child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(color: Colors.redAccent),
-            ));
-          }
-          return PostWidget(post: _posts[index]);
-        },
-      ),
+    // Optimization: Fetch user profile stream once here instead of in every PostWidget
+    return StreamBuilder<UserProfile>(
+      stream: DatabaseService().getUserProfileStream(currentUser.id),
+      builder: (context, snapshot) {
+        final userProfile = snapshot.data ?? currentUser;
+
+        return RefreshIndicator(
+          onRefresh: _refresh,
+          color: Colors.redAccent,
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: ListView.builder(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(top: 8, bottom: 20),
+              itemCount: _posts.length + (_hasMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _posts.length) {
+                  return const Center(child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(color: Colors.redAccent),
+                  ));
+                }
+                return RepaintBoundary(
+                  child: PostWidget(
+                    post: _posts[index],
+                    userProfile: userProfile, // Pass the stream data down
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
     );
   }
 }

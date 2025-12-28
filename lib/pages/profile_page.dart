@@ -27,6 +27,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
   bool _isCurrentUser = false;
   List<String> _editingSkills = [];
   int _selectedTabIndex = 0; // Added state for tab selection
+  int _newSkillRating = 3; // Default rating for new skills
 
   @override
   void initState() {
@@ -40,6 +41,18 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
     _semesterController = TextEditingController(text: displayUser.currentSemester);
     _skillInputController = TextEditingController();
     _editingSkills = List.from(displayUser.skills);
+  }
+
+  // Helper to parse "Skill:5" -> ("Skill", 5)
+  (String, int) _parseSkill(String raw) {
+    final parts = raw.split(':');
+    if (parts.length > 1) {
+      final r = int.tryParse(parts.last);
+      if (r != null && r >= 1 && r <= 5) {
+        return (parts.sublist(0, parts.length - 1).join(':'), r);
+      }
+    }
+    return (raw, 1); // Default if no rating found
   }
 
   @override
@@ -58,7 +71,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
       username: displayUser.username,
       fullName: _fullNameController.text.trim(),
       bio: _bioController.text.trim(),
-      skills: _editingSkills,
+      skills: _editingSkills, // Skills are saved as "Name:Rating" strings in Firestore
       currentSemester: _semesterController.text.trim(),
       openToCollaborate: displayUser.openToCollaborate,
       phoneNumber: displayUser.phoneNumber,
@@ -78,12 +91,18 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
     });
   }
 
-  void _addSkill(String skill) {
-    if (skill.isNotEmpty && !_editingSkills.contains(skill)) {
-      setState(() {
-        _editingSkills.add(skill);
-        _skillInputController.clear();
-      });
+  void _addSkill() {
+    final skill = _skillInputController.text.trim();
+    if (skill.isNotEmpty) {
+      // Check duplicates based on name only
+      final exists = _editingSkills.any((s) => _parseSkill(s).$1.toLowerCase() == skill.toLowerCase());
+      if (!exists) {
+        setState(() {
+          _editingSkills.add("$skill:$_newSkillRating");
+          _skillInputController.clear();
+          _newSkillRating = 3; // Reset to default
+        });
+      }
     }
   }
 
@@ -167,7 +186,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
       child: InkWell(
         onTap: () => setState(() => _selectedTabIndex = index),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
@@ -185,6 +204,75 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSkillGraph(List<String> rawSkills) {
+    final parsedSkills = rawSkills.map((s) => _parseSkill(s)).toList();
+    // Sort descending by rating
+    parsedSkills.sort((a, b) => b.$2.compareTo(a.$2));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0), // Match PostWidget horizontal margin
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: parsedSkills.map((item) {
+          final name = item.$1;
+          final rating = item.$2;
+          final color = getTagColor(name);
+          
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6.0),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 100, // Fixed width for label
+                  child: Align(
+                    alignment: Alignment.centerRight, // Align chip to the right
+                    child: Chip(
+                      label: Text(name, style: TextStyle(fontSize: 12, color: color), overflow: TextOverflow.ellipsis),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      backgroundColor: color.withValues(alpha: 0.15),
+                      side: BorderSide(color: color.withValues(alpha: 0.3)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Container(
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      FractionallySizedBox(
+                        widthFactor: rating / 5.0,
+                        child: Container(
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(2),
+                            boxShadow: [
+                              BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 6)
+                            ]
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text("$rating/5", style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -429,38 +517,68 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
 
                                   const SizedBox(height: 16),
 
-                                  // Skills
+                                  // Skills (Only show here if editing)
                                   if (_isEditing) ...[
-                                    TextField(
-                                      controller: _skillInputController,
-                                      style: textTheme.bodySmall,
-                                      decoration: InputDecoration(
-                                        labelText: 'Add skill',
-                                        isDense: true,
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
-                                      ),
-                                      onSubmitted: (val) => _addSkill(val.trim()),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: _skillInputController,
+                                            style: textTheme.bodySmall,
+                                            decoration: InputDecoration(
+                                              labelText: 'Add skill',
+                                              isDense: true,
+                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+                                            ),
+                                            onSubmitted: (_) => _addSkill(),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(kAppCornerRadius),
+                                          ),
+                                          child: DropdownButtonHideUnderline(
+                                            child: DropdownButton<int>(
+                                              value: _newSkillRating,
+                                              dropdownColor: const Color(0xFF1A1A1A),
+                                              icon: const Icon(Icons.star, color: Colors.amber, size: 20),
+                                              items: [1, 2, 3, 4, 5].map((r) => DropdownMenuItem(
+                                                value: r,
+                                                child: Text(r.toString(), style: const TextStyle(color: Colors.white)),
+                                              )).toList(),
+                                              onChanged: (val) => setState(() => _newSkillRating = val!),
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.add_circle, color: Colors.redAccent),
+                                          onPressed: _addSkill,
+                                        ),
+                                      ],
                                     ),
                                     const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: _editingSkills.map((rawSkill) {
+                                        final (name, rating) = _parseSkill(rawSkill);
+                                        final color = getTagColor(name);
+                                        return Chip(
+                                          label: Text("$name ($rating/5)", style: TextStyle(fontSize: 14, color: color)),
+                                          padding: EdgeInsets.zero,
+                                          visualDensity: VisualDensity.compact,
+                                          backgroundColor: color.withValues(alpha: 0.15),
+                                          side: BorderSide(color: color.withValues(alpha: 0.3)),
+                                          onDeleted: () => _removeSkill(rawSkill),
+                                          deleteIcon: Icon(Icons.close, size: 12, color: color),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+                                        );
+                                      }).toList(),
+                                    ),
                                   ],
-
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: (_isEditing ? _editingSkills : displayUser.skills).map((skill) {
-                                      final color = getTagColor(skill);
-                                      return Chip(
-                                        label: Text(skill, style: TextStyle(fontSize: 14, color: color)),
-                                        padding: EdgeInsets.zero,
-                                        visualDensity: VisualDensity.compact,
-                                        backgroundColor: color.withValues(alpha: 0.15),
-                                        side: BorderSide(color: color.withValues(alpha: 0.3)),
-                                        onDeleted: _isEditing ? () => _removeSkill(skill) : null,
-                                        deleteIcon: Icon(Icons.close, size: 12, color: color),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
-                                      );
-                                    }).toList(),
-                                  ),
                                 ],
                               ),
                             ),
@@ -468,6 +586,12 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                         ),
                       ),
                       const SizedBox(height: 24),
+
+                      // Skill Graph (View Mode Only)
+                      if (!_isEditing && displayUser.skills.isNotEmpty) ...[
+                         _buildSkillGraph(displayUser.skills),
+                         const SizedBox(height: 24),
+                      ],
                       
                       // Tabs for Posts / Saved
                       if (_isCurrentUser)

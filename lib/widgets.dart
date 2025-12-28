@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
 import 'models.dart';
 import 'data.dart'; // for currentUser
 import 'services/database_service.dart'; // Needed to fetch user profile
@@ -56,24 +55,29 @@ String _formatDate(DateTime date) {
 class GlassyContainer extends StatelessWidget {
   final Widget child;
   final double padding;
+  final Color? color;
+  final Color? borderColor;
 
-  const GlassyContainer({super.key, required this.child, this.padding = 16.0});
+  const GlassyContainer({
+    super.key, 
+    required this.child, 
+    this.padding = 16.0,
+    this.color,
+    this.borderColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 1, sigmaY: 1),
-        child: Container(
-          padding: EdgeInsets.all(padding),
-          decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-            border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-          ),
-          child: child,
+      child: Container(
+        padding: EdgeInsets.all(padding),
+        decoration: BoxDecoration(
+          color: color ?? Colors.red.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
+          border: Border.all(color: borderColor ?? Colors.red.withValues(alpha: 0.3)),
         ),
+        child: child,
       ),
     );
   }
@@ -81,8 +85,9 @@ class GlassyContainer extends StatelessWidget {
 
 class PostWidget extends StatelessWidget {
   final Post post;
+  final UserProfile? userProfile; // Optimization: Pass this to avoid N+1 streams
 
-  const PostWidget({super.key, required this.post});
+  const PostWidget({super.key, required this.post, this.userProfile});
 
   void _navigateToProfile(BuildContext context) async {
     // Fetch the full user profile based on the ID in the post
@@ -97,115 +102,131 @@ class PostWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // We need to listen to the current user's profile to update the heart icon state
+    // Optimization: If userProfile is provided (lifted state), use it directly.
+    // Otherwise, fall back to internal StreamBuilder (legacy behavior).
+    if (userProfile != null) {
+      return _buildPostContent(context, userProfile!);
+    }
+
     return StreamBuilder<UserProfile>(
       stream: DatabaseService().getUserProfileStream(currentUser.id),
       builder: (context, snapshot) {
         final user = snapshot.data ?? currentUser;
-        final isSaved = user.savedPostIds.contains(post.id);
+        return _buildPostContent(context, user);
+      }
+    );
+  }
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-          child: GlassyContainer(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildPostContent(BuildContext context, UserProfile user) {
+    final isSaved = user.savedPostIds.contains(post.id);
+    final isAnnouncement = post.username == 'admin';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      child: GlassyContainer(
+        color: isAnnouncement ? Colors.amber.withValues(alpha: 0.15) : null,
+        borderColor: isAnnouncement ? Colors.amber.withValues(alpha: 0.6) : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Clickable User Info
-                    GestureDetector(
-                      onTap: () => _navigateToProfile(context),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                // Clickable User Info
+                GestureDetector(
+                  onTap: () => _navigateToProfile(context),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                post.userFullName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold, 
-                                  color: Colors.white, 
-                                  fontSize: 16,
-                                  decoration: TextDecoration.underline, // Visual cue
-                                  decorationColor: Colors.white30,
-                                ),
-                              ),
-                              const SizedBox(width: 8,),
-                              Text(
-                                '@${post.username}',
-                                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                              ),
-                            ],
+                          if (isAnnouncement) ...[
+                            const Icon(Icons.campaign, color: Colors.amber, size: 20),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            post.userFullName,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold, 
+                              color: isAnnouncement ? Colors.amber : Colors.white, 
+                              fontSize: 16,
+                              decoration: TextDecoration.underline, // Visual cue
+                              decorationColor: isAnnouncement ? Colors.amber.withValues(alpha: 0.3) : Colors.white30,
+                            ),
+                          ),
+                          const SizedBox(width: 8,),
+                          Text(
+                            '@${post.username}',
+                            style: TextStyle(color: isAnnouncement ? Colors.amberAccent : Colors.redAccent, fontSize: 12),
                           ),
                         ],
                       ),
+                    ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    Text(
+                      _formatDate(post.timestamp),
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
-                    Row(
-                      children: [
-                        Text(
-                          _formatDate(post.timestamp),
-                          style: const TextStyle(color: Colors.grey, fontSize: 12),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: Icon(
-                            isSaved ? Icons.favorite : Icons.favorite_border,
-                            color: isSaved ? Colors.redAccent : Colors.white54,
-                            size: 20,
-                          ),
-                          onPressed: () {
-                            DatabaseService().toggleSavePost(currentUser.id, post.id);
-                          },
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                      ],
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: Icon(
+                        isSaved ? Icons.favorite : Icons.favorite_border,
+                        color: isSaved ? Colors.redAccent : Colors.white54,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        DatabaseService().toggleSavePost(currentUser.id, post.id);
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(post.content),
-                if (post.tags.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 4,
-                    children: post.tags.map((t) {
-                      final color = getTagColor(t);
-                      return Chip(
-                        label: Text(t, style: TextStyle(fontSize: 10, color: color)),
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: color.withValues(alpha: 0.15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
-                        side: BorderSide(color: color.withValues(alpha: 0.3)),
-                      );
-                    }).toList(),
-                  )
-                ],
-                if (post.imageUrls.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 200,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: post.imageUrls.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-                            child: Image.network(post.imageUrls[index]),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
               ],
             ),
-          ),
-        );
-      }
+            const SizedBox(height: 8),
+            Text(post.content),
+            if (post.tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 4,
+                children: post.tags.map((t) {
+                  final color = getTagColor(t);
+                  return Chip(
+                    label: Text(t, style: TextStyle(fontSize: 10, color: color)),
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: color.withValues(alpha: 0.15),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
+                    side: BorderSide(color: color.withValues(alpha: 0.3)),
+                  );
+                }).toList(),
+              )
+            ],
+            if (post.imageUrls.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: post.imageUrls.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
+                        child: Image.network(post.imageUrls[index]),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
