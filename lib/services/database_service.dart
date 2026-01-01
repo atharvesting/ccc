@@ -206,8 +206,16 @@ class DatabaseService {
       currentStreak = 1;
     }
     
-    // 2. Create the post with the calculated streak
-    final postRef = _db.collection('posts').doc();
+    // 2. Create the post
+    // LOGIC CHANGE: If communityId is present, save to sub-collection.
+    // Otherwise, save to global 'posts' collection.
+    DocumentReference postRef;
+    if (post.communityId != null && post.communityId!.isNotEmpty) {
+      postRef = _db.collection('communities').doc(post.communityId).collection('posts').doc();
+    } else {
+      postRef = _db.collection('posts').doc();
+    }
+
     final postData = post.toMap();
     postData['streak'] = currentStreak; // Store streak in post
     batch.set(postRef, postData);
@@ -217,6 +225,8 @@ class DatabaseService {
 
   // Scalable Pagination: Global Feed
   Future<List<Post>> getGlobalPosts({int limit = 10, Post? lastPost}) async {
+    // Query ONLY the global 'posts' collection. 
+    // Community posts are in a different path, so they are automatically excluded.
     var query = _db
         .collection('posts')
         .orderBy('timestamp', descending: true)
@@ -236,24 +246,30 @@ class DatabaseService {
   Future<List<Post>> getFollowingPosts(List<String> followingIds, {int limit = 10, Post? lastPost}) async {
     if (followingIds.isEmpty) return [];
 
-    // Take first 30 to avoid crash. 
-    final safeIds = followingIds.take(8).toList();
+    // Take first 10 to be safe with Firestore limits (limit is 30 for 'in', but 10 is safer for complex queries)
+    final safeIds = followingIds.take(10).toList();
 
-    var query = _db
-        .collection('posts')
-        .where('userId', whereIn: safeIds)
-        .orderBy('timestamp', descending: true)
-        .limit(limit);
+    try {
+      var query = _db
+          .collection('posts')
+          .where('userId', whereIn: safeIds)
+          .orderBy('timestamp', descending: true)
+          .limit(limit);
 
-    if (lastPost != null) {
-      query = query.startAfter([lastPost.timestamp]);
+      if (lastPost != null) {
+        query = query.startAfter([lastPost.timestamp]);
+      }
+
+      final snapshot = await query.get();
+      return snapshot.docs.map((doc) => Post.fromMap(doc.id, doc.data())).toList();
+    } catch (e) {
+      print("Error fetching following posts: $e");
+      return [];
     }
-
-    final snapshot = await query.get();
-    return snapshot.docs.map((doc) => Post.fromMap(doc.id, doc.data())).toList();
   }
 
   Stream<List<Post>> getPostsStream() {
+    // Global feed stream
     return _db
         .collection('posts')
         .orderBy('timestamp', descending: true)
@@ -266,6 +282,7 @@ class DatabaseService {
   }
 
   Stream<List<Post>> getUserPostsStream(String userId) {
+    // Only shows global posts on profile (privacy feature)
     return _db
         .collection('posts')
         .where('userId', isEqualTo: userId)
@@ -304,23 +321,161 @@ class DatabaseService {
     }).toList();
   }
 
+  // --- Communities ---
+
+  Future<void> createCommunity(Community community) async {
+    // Check if code exists
+    final query = await _db.collection('communities').where('code', isEqualTo: community.code).get();
+    if (query.docs.isNotEmpty) throw Exception("Community code already taken. Please choose another.");
+    
+    await _db.collection('communities').add(community.toMap());
+  }
+
+  Future<void> joinCommunity(String userId, String code) async {
+    final query = await _db.collection('communities').where('code', isEqualTo: code).limit(1).get();
+    if (query.docs.isEmpty) throw Exception("Invalid Community Code");
+    
+    final doc = query.docs.first;
+    final community = Community.fromMap(doc.id, doc.data());
+    
+    if (community.memberIds.contains(userId)) throw Exception("You are already a member of this community.");
+    
+    await _db.collection('communities').doc(doc.id).update({
+      'memberIds': FieldValue.arrayUnion([userId])
+    });
+  }
+
+  Stream<List<Community>> getUserCommunitiesStream(String userId) {
+    return _db.collection('communities')
+      .where('memberIds', arrayContains: userId)
+      .snapshots()
+      .map((snap) => snap.docs.map((d) => Community.fromMap(d.id, d.data())).toList());
+  }
+
+  Future<List<Post>> getCommunityPosts(String communityId, {int limit = 10, Post? lastPost}) async {
+    // Query the SUB-COLLECTION for this specific community
+    var query = _db.collection('communities').doc(communityId).collection('posts')
+        .orderBy('timestamp', descending: true)
+        .limit(limit);
+        
+    if (lastPost != null) {
+      query = query.startAfter([lastPost.timestamp]);
+    }
+    
+    final snapshot = await query.get();
+    return snapshot.docs.map((doc) => Post.fromMap(doc.id, doc.data())).toList();
+  }
+
   // --- Events ---
 
   Future<void> createEvent(Event event) async {
     await _db.collection('events').add(event.toMap());
   }
 
+  Future<void> updateEvent(Event event) async {
+    await _db.collection('events').doc(event.id).set(event.toMap());
+  }
+
   Future<void> deleteEvent(String eventId) async {
     await _db.collection('events').doc(eventId).delete();
+  }
+
+  Future<void> approveEvent(String eventId) async {
+    await _db.collection('events').doc(eventId).update({'isApproved': true});
   }
 
   Stream<List<Event>> getEventsStream() {
     return _db
         .collection('events')
-        .orderBy('endDate', descending: true)
+        .where('isApproved', isEqualTo: true) // Only show approved events
+        // Removed orderBy to avoid composite index requirement. Sorting client-side.
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => Event.fromMap(doc.id, doc.data())).toList();
+      final events = snapshot.docs.map((doc) => Event.fromMap(doc.id, doc.data())).toList();
+      events.sort((a, b) => b.endDate.compareTo(a.endDate));
+      return events;
     });
+  }
+
+  Stream<List<Event>> getPendingEventsStream() {
+    return _db
+        .collection('events')
+        .where('isApproved', isEqualTo: false) // Only show pending requests
+        // Removed orderBy to avoid composite index requirement. Sorting client-side.
+        .snapshots()
+        .map((snapshot) {
+      final events = snapshot.docs.map((doc) => Event.fromMap(doc.id, doc.data())).toList();
+      events.sort((a, b) => b.endDate.compareTo(a.endDate));
+      return events;
+    });
+  }
+
+  // --- Skill Matching ---
+
+  // Algorithm 1: Match based on User's Profile
+  Future<List<UserProfile>> getProfileMatches(UserProfile currentUser) async {
+    if (currentUser.skills.isEmpty) return [];
+
+    // LOOSENED LOGIC: Fetch ALL users who are open to collaborate, 
+    // instead of strictly filtering by skills in the DB query.
+    final query = await _db.collection('users')
+        .where('openToCollaborate', isEqualTo: true)
+        .get();
+
+    var candidates = query.docs
+        .map((doc) => UserProfile.fromMap(doc.id, doc.data()))
+        .where((u) => u.id != currentUser.id) // Exclude self
+        .toList();
+
+    // 2. Rank candidates
+    // Score = (Common Skills Count * 10) + (Sum of Ratings for Common Skills)
+    candidates.sort((a, b) {
+      int scoreA = _calculateMatchScore(currentUser.skills, a);
+      int scoreB = _calculateMatchScore(currentUser.skills, b);
+      return scoreB.compareTo(scoreA); // Descending
+    });
+
+    // Filter out users with 0 score (Must have at least one common skill)
+    return candidates.where((u) => _calculateMatchScore(currentUser.skills, u) > 0).toList();
+  }
+
+  // Algorithm 2: Match based on Selected Domains
+  Future<List<UserProfile>> getDomainMatches(List<String> selectedDomains) async {
+    if (selectedDomains.isEmpty) return [];
+
+    // LOOSENED LOGIC: Fetch ALL users who are open to collaborate
+    final query = await _db.collection('users')
+        .where('openToCollaborate', isEqualTo: true)
+        .get();
+
+    var candidates = query.docs
+        .map((doc) => UserProfile.fromMap(doc.id, doc.data()))
+        .toList();
+
+    // Rank based on how well they match the requested domains
+    candidates.sort((a, b) {
+      int scoreA = _calculateMatchScore(selectedDomains, a);
+      int scoreB = _calculateMatchScore(selectedDomains, b);
+      return scoreB.compareTo(scoreA);
+    });
+
+    // Filter out users with 0 score (Must have at least one common skill)
+    return candidates.where((u) => _calculateMatchScore(selectedDomains, u) > 0).toList();
+  }
+
+  int _calculateMatchScore(List<String> targetSkills, UserProfile candidate) {
+    int score = 0;
+    // Normalize target skills for case-insensitive comparison
+    final normalizedTargets = targetSkills.map((e) => e.toLowerCase()).toList();
+
+    for (var skill in candidate.skills) {
+      // Check if candidate's skill exists in target list (case-insensitive)
+      // We iterate candidate skills to look up rating easily
+      if (normalizedTargets.contains(skill.toLowerCase())) {
+        score += 10; // Base score for having the skill
+        score += candidate.skillRatings[skill] ?? 0; // Bonus for rating
+      }
+    }
+    return score;
   }
 }

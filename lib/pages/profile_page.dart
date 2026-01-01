@@ -28,6 +28,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
   List<String> _editingSkills = [];
   int _selectedTabIndex = 0; // Added state for tab selection
   int _newSkillRating = 3; // Default rating for new skills
+  bool _editingOpenToCollaborate = false; // New state for editing collaboration status
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
     _semesterController = TextEditingController(text: displayUser.currentSemester);
     _skillInputController = TextEditingController();
     _editingSkills = List.from(displayUser.skills);
+    _editingOpenToCollaborate = displayUser.openToCollaborate; // Initialize
   }
 
   // Helper to parse "Skill:5" -> ("Skill", 5)
@@ -73,7 +75,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
       bio: _bioController.text.trim(),
       skills: _editingSkills, // Skills are saved as "Name:Rating" strings in Firestore
       currentSemester: _semesterController.text.trim(),
-      openToCollaborate: displayUser.openToCollaborate,
+      openToCollaborate: _editingOpenToCollaborate, // Use edited value
       phoneNumber: displayUser.phoneNumber,
       savedPostIds: displayUser.savedPostIds,
       followers: displayUser.followers,
@@ -287,36 +289,8 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
       builder: (context, snapshot) {
         final user = snapshot.data ?? displayUser;
 
-        return Scaffold(
-          extendBodyBehindAppBar: true,
-          appBar: AppBar(
-            title: Text('Profile', style: textTheme.titleMedium),
-            backgroundColor: const Color.fromARGB(255, 43, 0, 0),
-            centerTitle: true,
-            elevation: 0,
-            actions: [
-              if (_isCurrentUser)
-                IconButton(
-                  icon: Icon(_isEditing ? Icons.check : Icons.edit),
-                  onPressed: () {
-                    if (_isEditing) {
-                      _saveChanges();
-                    } else {
-                      setState(() {
-                        _isEditing = true;
-                        // Reset editing state to current values from stream
-                        _editingSkills = List.from(user.skills);
-                        _fullNameController.text = user.fullName;
-                        _semesterController.text = user.currentSemester;
-                        _bioController.text = user.bio;
-                      });
-                    }
-                  },
-                )
-            ],
-          ),
-          // Changed structure: SingleChildScrollView is now the parent of Center/ConstrainedBox
-          // This ensures the scrollbar is attached to the full screen width, not the centered column.
+        return GlobalScaffold(
+          selectedIndex: _isCurrentUser ? 5 : -1, // Highlight only if current user
           body: Stack(
             children: [
               // 1. Background Gradient
@@ -376,6 +350,41 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                         children: [
                           // Spacer for AppBar
                           const SizedBox(height: kToolbarHeight + 20),
+                          
+                          // Custom Header with Title and Edit Button
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              const Text(
+                                'Profile',
+                                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                              if (_isCurrentUser)
+                                Positioned(
+                                  right: 0,
+                                  child: IconButton(
+                                    icon: Icon(_isEditing ? Icons.check : Icons.edit, color: Colors.white),
+                                    onPressed: () {
+                                      if (_isEditing) {
+                                        _saveChanges();
+                                      } else {
+                                        setState(() {
+                                          _isEditing = true;
+                                          // Reset editing state to current values from stream
+                                          _editingSkills = List.from(user.skills);
+                                          _fullNameController.text = user.fullName;
+                                          _semesterController.text = user.currentSemester;
+                                          _bioController.text = user.bio;
+                                          _editingOpenToCollaborate = user.openToCollaborate; // Reset toggle
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
                           // Redesigned Profile Header
                           Container(
                             padding: const EdgeInsets.all(24),
@@ -426,7 +435,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                         "@${user.username}",
                                         style: textTheme.bodyMedium?.copyWith(color: Colors.grey),
                                       ),
-                                      const SizedBox(height: 12),
+                                      const SizedBox(height: 4),
                                       if (!_isCurrentUser)
                                         ElevatedButton(
                                           onPressed: _toggleFollow,
@@ -436,10 +445,6 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                           ),
                                           child: Text(currentUser.following.contains(user.id) ? "Unfollow" : "Follow", style: const TextStyle(color: Colors.white)),
                                         ),
-                                  
-                                      // Streak Display
-                                      const SizedBox(height: 12),
-                                  
                                     ],
                                   ),
                                 ),
@@ -502,7 +507,37 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                               child: Text("Semester ${user.currentSemester}", style: textTheme.bodySmall),
                                             ),
                                           
-                                          if (user.openToCollaborate)
+                                          if (_isEditing)
+                                            InkWell(
+                                              onTap: () => setState(() => _editingOpenToCollaborate = !_editingOpenToCollaborate),
+                                              borderRadius: BorderRadius.circular(kAppCornerRadius),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: _editingOpenToCollaborate ? Colors.green.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.2),
+                                                  borderRadius: BorderRadius.circular(kAppCornerRadius),
+                                                  border: Border.all(color: _editingOpenToCollaborate ? Colors.green.withValues(alpha: 0.5) : Colors.grey.withValues(alpha: 0.5)),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      _editingOpenToCollaborate ? Icons.check_box : Icons.check_box_outline_blank, 
+                                                      size: 16, 
+                                                      color: _editingOpenToCollaborate ? Colors.greenAccent : Colors.grey
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      "Open to Collaborate", 
+                                                      style: textTheme.bodySmall?.copyWith(
+                                                        color: _editingOpenToCollaborate ? Colors.greenAccent : Colors.grey
+                                                      )
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            )
+                                          else if (user.openToCollaborate)
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                               decoration: BoxDecoration(
@@ -519,6 +554,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                                 ],
                                               ),
                                             ),
+                                            
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                               decoration: BoxDecoration(

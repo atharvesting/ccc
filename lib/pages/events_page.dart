@@ -3,6 +3,8 @@ import 'dart:ui'; // For ImageFilter
 import '../models.dart';
 import '../services/database_service.dart';
 import '../widgets.dart'; // For kAppCornerRadius
+import '../data.dart'; // For currentUser
+// For EditEventRequestDialog
 
 class EventsPage extends StatefulWidget {
   const EventsPage({super.key});
@@ -16,20 +18,6 @@ class _EventsPageState extends State<EventsPage> {
 
   bool _isSameDay(DateTime a, DateTime b) => 
       a.year == b.year && a.month == b.month && a.day == b.day;
-
-  // Reusing the shadow style from FeedPage
-  List<Shadow> get _titleShadows => [
-    const Shadow(
-      blurRadius: 30.0,
-      color: Colors.redAccent,
-      offset: Offset(0, 0),
-    ),
-    Shadow(
-      blurRadius: 30.0,
-      color: Colors.red.withValues(alpha: 0.6),
-      offset: const Offset(0, 0),
-    ),
-  ];
 
   Widget _buildFilterButton(int index, String text) {
     final bool isActive = _selectedIndex == index;
@@ -56,21 +44,17 @@ class _EventsPageState extends State<EventsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text(
-          '< < <',
-          style: TextStyle(
-            fontSize: 40,
-            fontWeight: FontWeight.bold,
-            shadows: _titleShadows,
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        foregroundColor: Colors.white,
+    return GlobalScaffold(
+      selectedIndex: 2,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (context) => const CreateEventDialog(),
+          );
+        },
+        backgroundColor: Colors.redAccent,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
       body: Stack(
         children: [
@@ -90,10 +74,10 @@ class _EventsPageState extends State<EventsPage> {
             children: [
               const SizedBox(height: kToolbarHeight + 20),
               const Text(
-                "Notice Board",
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                "Event Board",
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Expanded(
                 child: StreamBuilder<List<Event>>(
                   stream: DatabaseService().getEventsStream(),
@@ -206,7 +190,7 @@ class _EventsPageState extends State<EventsPage> {
           ),
         Expanded(
           child: events.isEmpty 
-            ? Center(child: Text("No $title events", style: const TextStyle(color: Colors.white30)))
+            ? Center(child: Text("No $title events", style: const TextStyle(color: Colors.white38)))
             : ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 itemCount: events.length,
@@ -281,7 +265,7 @@ class _EventListItem extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.location_on, size: 12, color: accentColor),
+                      const Icon(Icons.location_on, size: 12, color: Colors.blue),
                       const SizedBox(width: 4),
                       Expanded(child: Text(event.venue, style: TextStyle(fontSize: 12, color: accentColor), overflow: TextOverflow.ellipsis)),
                     ],
@@ -296,11 +280,65 @@ class _EventListItem extends StatelessWidget {
   }
 }
 
-class _EventDetailsDialog extends StatelessWidget {
+class _EventDetailsDialog extends StatefulWidget {
   final Event event;
   final Color accentColor;
 
   const _EventDetailsDialog({required this.event, required this.accentColor});
+
+  @override
+  State<_EventDetailsDialog> createState() => _EventDetailsDialogState();
+}
+
+class _EventDetailsDialogState extends State<_EventDetailsDialog> {
+  bool _isAdmin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAdmin();
+  }
+
+  Future<void> _checkAdmin() async {
+    final isAdmin = await DatabaseService().isAdmin(currentUser.id);
+    if (mounted) {
+      setState(() {
+        _isAdmin = isAdmin;
+      });
+    }
+  }
+
+  Future<void> _deleteEvent() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+        title: const Text("Delete Event?", style: TextStyle(color: Colors.white)),
+        content: const Text("Are you sure you want to delete this event?", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.redAccent))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await DatabaseService().deleteEvent(widget.event.id);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Event Deleted")));
+      }
+    }
+  }
+
+  void _editEvent() {
+    Navigator.pop(context); // Close details dialog
+    showDialog(
+      context: context,
+      builder: (context) => CreateEventDialog(eventToEdit: widget.event),
+    );
+  }
 
   String _formatFullDate(DateTime date) {
     final localDate = date.toLocal();
@@ -332,7 +370,7 @@ class _EventDetailsDialog extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        event.title,
+                        widget.event.title,
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -340,6 +378,18 @@ class _EventDetailsDialog extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (_isAdmin) ...[
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                        onPressed: _editEvent,
+                        tooltip: "Edit Event",
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.redAccent),
+                        onPressed: _deleteEvent,
+                        tooltip: "Delete Event",
+                      ),
+                    ],
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.white54),
                       onPressed: () => Navigator.pop(context),
@@ -354,23 +404,23 @@ class _EventDetailsDialog extends StatelessWidget {
                 Row(
                   children: [
                     // Date
-                    Icon(Icons.calendar_today, size: 14, color: accentColor),
+                    Icon(Icons.calendar_today, size: 14, color: widget.accentColor),
                     const SizedBox(width: 6),
                     Text(
-                      event.startDate != null 
-                        ? "${_formatFullDate(event.startDate!)} - ${_formatFullDate(event.endDate)}"
-                        : _formatFullDate(event.endDate),
+                      widget.event.startDate != null 
+                        ? "${_formatFullDate(widget.event.startDate!)} - ${_formatFullDate(widget.event.endDate)}"
+                        : _formatFullDate(widget.event.endDate),
                       style: const TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                     
                     const SizedBox(width: 16),
                     
                     // Venue
-                    Icon(Icons.location_on, size: 14, color: accentColor),
+                    Icon(Icons.location_on, size: 14, color: widget.accentColor),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        event.venue, 
+                        widget.event.venue, 
                         style: const TextStyle(color: Colors.white70, fontSize: 13),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -387,24 +437,24 @@ class _EventDetailsDialog extends StatelessWidget {
                       children: [
                         // Description
                         Text(
-                          event.description,
+                          widget.event.description,
                           style: const TextStyle(color: Colors.white, height: 1.5, fontSize: 15),
                         ),
                         
                         // Links
-                        if (event.links.isNotEmpty) ...[
+                        if (widget.event.links.isNotEmpty) ...[
                           const SizedBox(height: 24),
                           const Text("Links", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: event.links.map((link) => ActionChip(
+                            children: widget.event.links.map((link) => ActionChip(
                               label: Text(link.label),
                               avatar: const Icon(Icons.link, size: 14),
-                              backgroundColor: accentColor.withValues(alpha: 0.15),
-                              side: BorderSide(color: accentColor.withValues(alpha: 0.4)),
-                              labelStyle: TextStyle(color: accentColor, fontSize: 13),
+                              backgroundColor: widget.accentColor.withValues(alpha: 0.15),
+                              side: BorderSide(color: widget.accentColor.withValues(alpha: 0.4)),
+                              labelStyle: TextStyle(color: widget.accentColor, fontSize: 13),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
                               onPressed: () {
                                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Opening ${link.url}")));
@@ -414,11 +464,11 @@ class _EventDetailsDialog extends StatelessWidget {
                         ],
 
                         // Contacts
-                        if (event.contacts.isNotEmpty) ...[
+                        if (widget.event.contacts.isNotEmpty) ...[
                           const SizedBox(height: 24),
                           const Text("Contacts", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
                           const SizedBox(height: 8),
-                          ...event.contacts.map((c) => Padding(
+                          ...widget.event.contacts.map((c) => Padding(
                             padding: const EdgeInsets.only(bottom: 4.0),
                             child: Row(
                               children: [
@@ -435,6 +485,285 @@ class _EventDetailsDialog extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class CreateEventDialog extends StatefulWidget {
+  final Event? eventToEdit; // Added parameter for editing
+  const CreateEventDialog({super.key, this.eventToEdit});
+
+  @override
+  State<CreateEventDialog> createState() => _CreateEventDialogState();
+}
+
+class _CreateEventDialogState extends State<CreateEventDialog> {
+  late TextEditingController _titleController;
+  late TextEditingController _descController;
+  late TextEditingController _venueController;
+  
+  // Contacts
+  final _contactLabelController = TextEditingController();
+  final _contactInfoController = TextEditingController();
+  late List<EventContact> _contacts;
+
+  // Links
+  final _linkLabelController = TextEditingController();
+  final _linkUrlController = TextEditingController();
+  late List<EventLink> _links;
+
+  DateTime? _startDate;
+  DateTime? _endDate;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.eventToEdit;
+    _titleController = TextEditingController(text: e?.title ?? '');
+    _descController = TextEditingController(text: e?.description ?? '');
+    _venueController = TextEditingController(text: e?.venue ?? '');
+    _contacts = e != null ? List.from(e.contacts) : [];
+    _links = e != null ? List.from(e.links) : [];
+    _startDate = e?.startDate;
+    _endDate = e?.endDate;
+  }
+
+  Future<void> _selectDate(bool isStart) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.redAccent,
+              onPrimary: Colors.white,
+              surface: Color(0xFF1A1A1A),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _startDate = picked;
+        } else {
+          _endDate = picked;
+        }
+      });
+    }
+  }
+
+  void _addContact() {
+    if (_contactLabelController.text.trim().isNotEmpty && _contactInfoController.text.trim().isNotEmpty) {
+      setState(() {
+        _contacts.add(EventContact(
+          label: _contactLabelController.text.trim(),
+          info: _contactInfoController.text.trim()
+        ));
+        _contactLabelController.clear();
+        _contactInfoController.clear();
+      });
+    }
+  }
+
+  void _addLink() {
+    if (_linkLabelController.text.trim().isNotEmpty && _linkUrlController.text.trim().isNotEmpty) {
+      setState(() {
+        _links.add(EventLink(label: _linkLabelController.text.trim(), url: _linkUrlController.text.trim()));
+        _linkLabelController.clear();
+        _linkUrlController.clear();
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_titleController.text.isEmpty || _descController.text.isEmpty || _venueController.text.isEmpty || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all mandatory fields (Title, Desc, Venue, End Date)")));
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      // Check if user is admin
+      final isAdmin = await DatabaseService().isAdmin(currentUser.id);
+      final isEditing = widget.eventToEdit != null;
+
+      final event = Event(
+        id: widget.eventToEdit?.id ?? '', // Use existing ID if editing
+        title: _titleController.text.trim(),
+        description: _descController.text.trim(),
+        venue: _venueController.text.trim(),
+        contacts: _contacts,
+        links: _links,
+        startDate: _startDate,
+        endDate: _endDate!,
+        isApproved: isEditing ? widget.eventToEdit!.isApproved : isAdmin, // Keep approval status if editing, else auto-approve if admin
+      );
+
+      if (isEditing) {
+        await DatabaseService().updateEvent(event);
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Event Updated Successfully")));
+        }
+      } else {
+        await DatabaseService().createEvent(event);
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(isAdmin ? "Event Created Successfully" : "Event Request Sent to Admin"))
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+      title: Text(widget.eventToEdit != null ? "Edit Event" : "Create New Event", style: const TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: 600,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTextField(_titleController, "Title *"),
+              const SizedBox(height: 12),
+              _buildTextField(_descController, "Description *", maxLines: 3),
+              const SizedBox(height: 12),
+              _buildTextField(_venueController, "Venue *"),
+              const SizedBox(height: 16),
+              
+              // Dates
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateSelector("Start Date (Opt)", _startDate, () => _selectDate(true)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildDateSelector("End Date *", _endDate, () => _selectDate(false)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Contacts
+              const Text("Contacts", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(flex: 1, child: _buildTextField(_contactLabelController, "Label (e.g. Role)")),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 2, child: _buildTextField(_contactInfoController, "Info (e.g. Name - Phone)")),
+                  IconButton(icon: const Icon(Icons.add_circle, color: Colors.greenAccent), onPressed: _addContact),
+                ],
+              ),
+              Wrap(
+                spacing: 8,
+                children: _contacts.map((c) => Chip(
+                  label: Text("${c.label}: ${c.info}"),
+                  backgroundColor: Colors.white10,
+                  deleteIcon: const Icon(Icons.close, size: 12),
+                  onDeleted: () => setState(() => _contacts.remove(c)),
+                )).toList(),
+              ),
+              const SizedBox(height: 16),
+
+              // Links
+              const Text("Links", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(flex: 1, child: _buildTextField(_linkLabelController, "Label")),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 2, child: _buildTextField(_linkUrlController, "URL")),
+                  IconButton(icon: const Icon(Icons.add_circle, color: Colors.greenAccent), onPressed: _addLink),
+                ],
+              ),
+              Wrap(
+                spacing: 8,
+                children: _links.map((l) => Chip(
+                  label: Text(l.label),
+                  backgroundColor: Colors.white10,
+                  deleteIcon: const Icon(Icons.close, size: 12),
+                  onDeleted: () => setState(() => _links.remove(l)),
+                )).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+        ),
+        ElevatedButton(
+          onPressed: _isSubmitting ? null : _submit,
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+          child: _isSubmitting 
+            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
+            : Text(widget.eventToEdit != null ? "Save Changes" : "Submit"),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, {int maxLines = 1}) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.grey),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+        filled: true,
+        fillColor: Colors.black.withValues(alpha: 0.2),
+        isDense: true,
+      ),
+    );
+  }
+
+  Widget _buildDateSelector(String label, DateTime? date, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(kAppCornerRadius),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white30),
+          borderRadius: BorderRadius.circular(kAppCornerRadius),
+          color: Colors.black.withValues(alpha: 0.2),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              date == null ? label : "${date.day}/${date.month}/${date.year}",
+              style: TextStyle(color: date == null ? Colors.grey : Colors.white),
+            ),
+            const Icon(Icons.calendar_today, size: 16, color: Colors.white54),
+          ],
         ),
       ),
     );

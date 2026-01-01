@@ -6,6 +6,7 @@ class UserProfile {
   final String fullName; // Display Name (e.g. John Doe)
   String bio;
   final List<String> skills;
+  final Map<String, int> skillRatings; // New: Rating for each skill (1-5)
   final String currentSemester;
   final bool openToCollaborate;
   final String? phoneNumber;
@@ -24,6 +25,7 @@ class UserProfile {
     required this.fullName,
     required this.bio,
     required this.skills,
+    this.skillRatings = const {}, // Default empty
     required this.currentSemester,
     required this.openToCollaborate,
     this.phoneNumber,
@@ -42,6 +44,7 @@ class UserProfile {
       'fullName': fullName,
       'bio': bio,
       'skills': skills,
+      'skillRatings': skillRatings,
       'currentSemester': currentSemester,
       'openToCollaborate': openToCollaborate,
       'phoneNumber': phoneNumber,
@@ -62,6 +65,7 @@ class UserProfile {
       fullName: map['userFullName'] ?? map['fullName'] ?? '', // Handle legacy field name
       bio: map['bio'] ?? '',
       skills: List<String>.from(map['skills'] ?? []),
+      skillRatings: Map<String, int>.from(map['skillRatings'] ?? {}),
       currentSemester: map['currentSemester'] ?? '',
       openToCollaborate: map['openToCollaborate'] ?? false,
       phoneNumber: map['phoneNumber'],
@@ -87,6 +91,7 @@ class Post {
   final List<String> tags;
   final DateTime timestamp;
   final int streak; // New field for streak at time of posting
+  final String? communityId; // New: Link to a community
 
   Post({
     required this.id,
@@ -98,6 +103,7 @@ class Post {
     required this.tags,
     required this.timestamp,
     this.streak = 0, // Default to 0
+    this.communityId,
   });
 
   Map<String, dynamic> toMap() {
@@ -110,6 +116,7 @@ class Post {
       'tags': tags,
       'timestamp': Timestamp.fromDate(timestamp),
       'streak': streak,
+      'communityId': communityId,
     };
   }
 
@@ -124,6 +131,46 @@ class Post {
       tags: List<String>.from(map['tags'] ?? []),
       timestamp: (map['timestamp'] as Timestamp).toDate(),
       streak: map['streak'] ?? 0,
+      communityId: map['communityId'],
+    );
+  }
+}
+
+class Community {
+  final String id;
+  final String name;
+  final String description;
+  final String code;
+  final String creatorId;
+  final List<String> memberIds;
+
+  Community({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.code,
+    required this.creatorId,
+    required this.memberIds,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'description': description,
+      'code': code,
+      'creatorId': creatorId,
+      'memberIds': memberIds,
+    };
+  }
+
+  factory Community.fromMap(String id, Map<String, dynamic> map) {
+    return Community(
+      id: id,
+      name: map['name'] ?? '',
+      description: map['description'] ?? '',
+      code: map['code'] ?? '',
+      creatorId: map['creatorId'] ?? '',
+      memberIds: List<String>.from(map['memberIds'] ?? []),
     );
   }
 }
@@ -169,6 +216,7 @@ class Event {
   final List<EventLink> links;
   final DateTime? startDate;
   final DateTime endDate;
+  final bool isApproved; // New field
 
   Event({
     required this.id,
@@ -179,6 +227,7 @@ class Event {
     required this.links,
     this.startDate,
     required this.endDate,
+    this.isApproved = false, // Default to false (pending)
   });
 
   Map<String, dynamic> toMap() {
@@ -190,6 +239,7 @@ class Event {
       'links': links.map((l) => l.toMap()).toList(),
       'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
       'endDate': Timestamp.fromDate(endDate),
+      'isApproved': isApproved,
     };
   }
 
@@ -200,7 +250,6 @@ class Event {
       description: map['description'] ?? '',
       contacts: (map['contacts'] as List<dynamic>?)
           ?.map((x) {
-            // Handle legacy string contacts if any exist in DB
             if (x is String) return EventContact(label: 'Contact', info: x);
             return EventContact.fromMap(Map<String, dynamic>.from(x));
           })
@@ -211,6 +260,7 @@ class Event {
           .toList() ?? [],
       startDate: map['startDate'] != null ? (map['startDate'] as Timestamp).toDate() : null,
       endDate: (map['endDate'] as Timestamp).toDate(),
+      isApproved: map['isApproved'] ?? false,
     );
   }
 }

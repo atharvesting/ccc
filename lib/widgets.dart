@@ -1,11 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'models.dart';
 import 'data.dart'; // for currentUser
 import 'services/database_service.dart'; // Needed to fetch user profile
-import 'pages/profile_page.dart'; // Needed for navigation
+import 'pages/profile_page.dart';
+import 'pages/feed_page.dart';
+import 'pages/communities_page.dart';
+import 'pages/events_page.dart';
+import 'pages/skill_matching_page.dart';
+import 'pages/search_page.dart';
+import 'pages/auth_page.dart';
 
 // Global Design Constant
 const double kAppCornerRadius = 5.0;
+
+// Shared Shadows for the App Title
+final List<Shadow> kAppTitleShadows = [
+  const Shadow(
+    blurRadius: 30.0,
+    color: Colors.redAccent,
+    offset: Offset(0, 0),
+  ),
+  Shadow(
+    blurRadius: 30.0,
+    color: Colors.red.withValues(alpha: 0.6),
+    offset: const Offset(0, 0),
+  ),
+];
 
 // Helper for Tag Colors
 Color getTagColor(String tag) {
@@ -73,6 +94,7 @@ class GlassyContainer extends StatelessWidget {
   final double padding;
   final Color? color;
   final Color? borderColor;
+  final Color? themeColor; // Added for easy theming
 
   const GlassyContainer({
     super.key, 
@@ -80,18 +102,21 @@ class GlassyContainer extends StatelessWidget {
     this.padding = 16.0,
     this.color,
     this.borderColor,
+    this.themeColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final baseColor = themeColor ?? Colors.red;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
       child: Container(
         padding: EdgeInsets.all(padding),
         decoration: BoxDecoration(
-          color: color ?? Colors.red.withValues(alpha: 0.1),
+          color: color ?? baseColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-          border: Border.all(color: borderColor ?? Colors.red.withValues(alpha: 0.3)),
+          border: Border.all(color: borderColor ?? baseColor.withValues(alpha: 0.3)),
         ),
         child: child,
       ),
@@ -102,8 +127,14 @@ class GlassyContainer extends StatelessWidget {
 class PostWidget extends StatelessWidget {
   final Post post;
   final UserProfile? userProfile; // Optimization: Pass this to avoid N+1 streams
+  final Color themeColor; // Added for theming
 
-  const PostWidget({super.key, required this.post, this.userProfile});
+  const PostWidget({
+    super.key, 
+    required this.post, 
+    this.userProfile,
+    this.themeColor = Colors.redAccent,
+  });
 
   void _navigateToProfile(BuildContext context) async {
     // Fetch the full user profile based on the ID in the post
@@ -136,12 +167,16 @@ class PostWidget extends StatelessWidget {
   Widget _buildPostContent(BuildContext context, UserProfile viewerProfile) {
     final isSaved = viewerProfile.savedPostIds.contains(post.id);
     final isAnnouncement = post.username == 'admin';
+    
+    final effectiveColor = isAnnouncement ? Colors.amber : themeColor;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       child: GlassyContainer(
-        color: isAnnouncement ? Colors.amber.withValues(alpha: 0.15) : null,
-        borderColor: isAnnouncement ? Colors.amber.withValues(alpha: 0.6) : null,
+        themeColor: effectiveColor,
+        // We can rely on GlassyContainer's defaults derived from themeColor, 
+        // or override if we want specific opacities for posts.
+        // Using defaults (0.1 bg, 0.3 border) looks clean.
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -164,16 +199,16 @@ class PostWidget extends StatelessWidget {
                             post.userFullName,
                             style: TextStyle(
                               fontWeight: FontWeight.bold, 
-                              color: isAnnouncement ? Colors.amber : Colors.white, 
+                              color: Colors.white, // Use theme color
                               fontSize: 16,
                               decoration: TextDecoration.underline, // Visual cue
-                              decorationColor: isAnnouncement ? Colors.amber.withValues(alpha: 0.3) : Colors.white30,
+                              decorationColor: effectiveColor.withValues(alpha: 0.3),
                             ),
                           ),
                           const SizedBox(width: 8,),
                           Text(
                             '@${post.username}',
-                            style: TextStyle(color: isAnnouncement ? Colors.amberAccent : Colors.redAccent, fontSize: 12),
+                            style: TextStyle(color: effectiveColor, fontSize: 12), // Use theme color
                           ),
                           // Streak Icon (From Post Data)
                           if (!isAnnouncement && post.streak > 0)
@@ -256,6 +291,157 @@ class PostWidget extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class GlobalScaffold extends StatelessWidget {
+  final Widget body;
+  final Widget? floatingActionButton;
+  final int selectedIndex;
+
+  const GlobalScaffold({
+    super.key,
+    required this.body,
+    this.floatingActionButton,
+    required this.selectedIndex,
+  });
+
+  void _onItemTapped(BuildContext context, int index) {
+    if (index == selectedIndex) return;
+
+    Widget page;
+    switch (index) {
+      case 0:
+        page = const FeedPage();
+        break;
+      case 1:
+        page = const CommunitiesPage();
+        break;
+      case 2:
+        page = const EventsPage();
+        break;
+      case 3:
+        page = const SkillMatchingPage();
+        break;
+      case 4:
+        page = const SearchPage();
+        break;
+      case 5:
+        page = const ProfilePage();
+        break;
+      default:
+        return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation1, animation2) => page,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      extendBody: true, // Allows body to extend behind the bottom bar
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '< < <',
+              style: TextStyle(
+                fontSize: 40,
+                fontWeight: FontWeight.bold,
+                shadows: kAppTitleShadows,
+              ),
+            ),
+            // const SizedBox(width: 10),
+            // const Text("x BIT J", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),),
+          ],
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        // elevation: 0,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white70),
+            tooltip: 'Logout',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                 Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => const AuthPage()), 
+                    (route) => false
+                 );
+              }
+            },
+          ),
+        ],
+      ),
+      body: body,
+      floatingActionButton: floatingActionButton,
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+        child: SafeArea(
+          child: Center(
+            heightFactor: 1.0,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400), // Constrain width for web
+              child: Container(
+                height: 65,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF222222).withValues(alpha: 0.7), // Solid dark grey, no glass effect
+                  borderRadius: BorderRadius.circular(35), // Pill shape
+                  border: Border.all(color: Colors.white12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildNavItem(context, Icons.home_outlined, Icons.home, 0),
+                    _buildNavItem(context, Icons.groups_2, Icons.groups, 1),
+                    _buildNavItem(context, Icons.event_note_outlined, Icons.event_note, 2),
+                    _buildNavItem(context, Icons.hub, Icons.hub, 3),
+                    _buildNavItem(context, Icons.search, Icons.search, 4),
+                    _buildNavItem(context, Icons.person_3, Icons.person, 5),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(BuildContext context, IconData icon, IconData selectedIcon, int index) {
+    final isSelected = selectedIndex == index;
+    return GestureDetector(
+      onTap: () => _onItemTapped(context, index),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 50,
+        height: double.infinity,
+        alignment: Alignment.center,
+        child: Icon(
+          isSelected ? selectedIcon : icon,
+          color: isSelected ? Colors.redAccent : Colors.white54,
+          size: 26,
         ),
       ),
     );

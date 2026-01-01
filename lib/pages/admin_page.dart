@@ -152,22 +152,22 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
-  void _showCreateEventDialog() {
+  void _showEditEventDialog(Event event) {
     showDialog(
       context: context,
-      builder: (context) => const CreateEventDialog(),
+      builder: (context) => EditEventRequestDialog(event: event),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    // final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text("Admin Console", style: textTheme.titleMedium),
-        backgroundColor: const Color.fromARGB(255, 43, 0, 0),
+        title: const Text("Admin Console", style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
         centerTitle: true,
         elevation: 0,
         foregroundColor: Colors.white,
@@ -235,13 +235,49 @@ class _AdminPageState extends State<AdminPage> {
                       children: [
                         const SizedBox(height: kToolbarHeight + 20),
                         
-                        // Section 0: Event Management (New)
+                        // Section 0: Event Requests (New)
                         _buildSection(
-                          title: "Event Management",
-                          icon: Icons.event,
+                          title: "Event Requests",
+                          icon: Icons.notifications_active,
                           color: Colors.green,
                           children: [
-                            _buildButton("Create New Event", Icons.add_circle_outline, Colors.green.withValues(alpha: 0.2), Colors.greenAccent, _showCreateEventDialog),
+                            StreamBuilder<List<Event>>(
+                              stream: DatabaseService().getPendingEventsStream(),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasError) {
+                                  return Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Text("Error loading requests: ${snapshot.error}", style: const TextStyle(color: Colors.redAccent)),
+                                  );
+                                }
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return const Center(child: CircularProgressIndicator(color: Colors.green));
+                                }
+                                final requests = snapshot.data ?? [];
+                                if (requests.isEmpty) {
+                                  return const Padding(
+                                    padding: EdgeInsets.all(8.0),
+                                    child: Text("No pending event requests.", style: TextStyle(color: Colors.white54)),
+                                  );
+                                }
+                                return ListView.separated(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: requests.length,
+                                  separatorBuilder: (_, _) => const Divider(color: Colors.white10),
+                                  itemBuilder: (context, index) {
+                                    final event = requests[index];
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(event.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                      subtitle: Text(event.venue, style: const TextStyle(color: Colors.white54)),
+                                      trailing: const Icon(Icons.edit, color: Colors.white54, size: 20),
+                                      onTap: () => _showEditEventDialog(event),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
                           ]
                         ),
 
@@ -500,36 +536,49 @@ class _AdminPageState extends State<AdminPage> {
   }
 }
 
-class CreateEventDialog extends StatefulWidget {
-  const CreateEventDialog({super.key});
+class EditEventRequestDialog extends StatefulWidget {
+  final Event event;
+  const EditEventRequestDialog({super.key, required this.event});
 
   @override
-  State<CreateEventDialog> createState() => _CreateEventDialogState();
+  State<EditEventRequestDialog> createState() => _EditEventRequestDialogState();
 }
 
-class _CreateEventDialogState extends State<CreateEventDialog> {
-  final _titleController = TextEditingController();
-  final _descController = TextEditingController();
-  final _venueController = TextEditingController();
+class _EditEventRequestDialogState extends State<EditEventRequestDialog> {
+  late TextEditingController _titleController;
+  late TextEditingController _descController;
+  late TextEditingController _venueController;
   
   // Contacts
   final _contactLabelController = TextEditingController();
   final _contactInfoController = TextEditingController();
-  final List<EventContact> _contacts = [];
+  late List<EventContact> _contacts;
 
   // Links
   final _linkLabelController = TextEditingController();
   final _linkUrlController = TextEditingController();
-  final List<EventLink> _links = [];
+  late List<EventLink> _links;
 
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isSubmitting = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.event.title);
+    _descController = TextEditingController(text: widget.event.description);
+    _venueController = TextEditingController(text: widget.event.venue);
+    _contacts = List.from(widget.event.contacts);
+    _links = List.from(widget.event.links);
+    _startDate = widget.event.startDate;
+    _endDate = widget.event.endDate;
+  }
+
   Future<void> _selectDate(bool isStart) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: isStart ? (_startDate ?? DateTime.now()) : (_endDate ?? DateTime.now()),
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       builder: (context, child) {
@@ -580,17 +629,17 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
     }
   }
 
-  Future<void> _submit() async {
+  Future<void> _approve() async {
     if (_titleController.text.isEmpty || _descController.text.isEmpty || _venueController.text.isEmpty || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all mandatory fields (Title, Desc, Venue, End Date)")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all mandatory fields")));
       return;
     }
 
     setState(() => _isSubmitting = true);
 
     try {
-      final event = Event(
-        id: '', // Generated by Firestore
+      final updatedEvent = Event(
+        id: widget.event.id,
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         venue: _venueController.text.trim(),
@@ -598,12 +647,28 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
         links: _links,
         startDate: _startDate,
         endDate: _endDate!,
+        isApproved: true, // Approve it
       );
 
-      await DatabaseService().createEvent(event);
+      await DatabaseService().updateEvent(updatedEvent);
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Event Created Successfully")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Event Approved & Updated")));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _reject() async {
+    setState(() => _isSubmitting = true);
+    try {
+      await DatabaseService().deleteEvent(widget.event.id);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Event Rejected & Deleted")));
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -617,7 +682,7 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
     return AlertDialog(
       backgroundColor: const Color(0xFF1A1A1A),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
-      title: const Text("Create New Event", style: TextStyle(color: Colors.white)),
+      title: const Text("Review Event Request", style: TextStyle(color: Colors.white)),
       content: SizedBox(
         width: 600,
         child: SingleChildScrollView(
@@ -625,6 +690,39 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Action Buttons at Top
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _isSubmitting ? null : _reject,
+                      icon: const Icon(Icons.close),
+                      label: const Text("Reject"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.withValues(alpha: 0.2),
+                        foregroundColor: Colors.redAccent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _isSubmitting ? null : _approve,
+                      icon: const Icon(Icons.check),
+                      label: const Text("Approve"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.withValues(alpha: 0.2),
+                        foregroundColor: Colors.greenAccent,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(color: Colors.white10, height: 32),
+              
+              // Editable Fields
               _buildTextField(_titleController, "Title *"),
               const SizedBox(height: 12),
               _buildTextField(_descController, "Description *", maxLines: 3),
@@ -651,9 +749,9 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Expanded(flex: 1, child: _buildTextField(_contactLabelController, "Label (e.g. Role)")),
+                  Expanded(flex: 1, child: _buildTextField(_contactLabelController, "Label")),
                   const SizedBox(width: 8),
-                  Expanded(flex: 2, child: _buildTextField(_contactInfoController, "Info (e.g. Name - Phone)")),
+                  Expanded(flex: 2, child: _buildTextField(_contactInfoController, "Info")),
                   IconButton(icon: const Icon(Icons.add_circle, color: Colors.greenAccent), onPressed: _addContact),
                 ],
               ),
@@ -695,12 +793,7 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-        ),
-        ElevatedButton(
-          onPressed: _isSubmitting ? null : _submit,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-          child: _isSubmitting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text("Create Event"),
+          child: const Text("Close", style: TextStyle(color: Colors.grey)),
         ),
       ],
     );

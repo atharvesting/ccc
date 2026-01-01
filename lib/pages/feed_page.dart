@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // Added for kIsWeb and defaultTargetPlatform
-import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:ui'; // For ImageFilter
 import '../models.dart';
 import '../data.dart'; // for currentUser
 import '../services/database_service.dart';
 import '../widgets.dart';
-import 'profile_page.dart';
 import 'create_post_page.dart';
-import 'search_page.dart';
 import 'admin_page.dart'; // <--- IMPORT ADDED HERE
-import 'events_page.dart'; // Import EventsPage
-import 'package:flutter/gestures.dart'; // Import for PointerScrollEvent
+// Import for PointerScrollEvent
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -26,7 +22,6 @@ class _FeedPageState extends State<FeedPage> {
   int _refreshCounter = 0; // Added to trigger feed refresh
 
   // Optimization: Move complex object creation out of build method to save CPU cycles
-  late final List<Shadow> _titleShadows;
   late final BoxDecoration _circleDecoration1;
   late final BoxDecoration _circleDecoration2;
   
@@ -50,20 +45,6 @@ class _FeedPageState extends State<FeedPage> {
   void initState() {
     super.initState();
     _checkAdminStatus(); // Trigger async check
-
-    // Initialize styles once to avoid recreation on every build
-    _titleShadows = [
-      const Shadow(
-        blurRadius: 30.0,
-        color: Colors.redAccent,
-        offset: Offset(0, 0),
-      ),
-      Shadow(
-        blurRadius: 30.0,
-        color: Colors.red.withValues(alpha: 0.6),
-        offset: const Offset(0, 0),
-      ),
-    ];
 
     // Optimization: Use BoxShadow for blur instead of ImageFiltered.
     // ImageFiltered with high sigma is very expensive and causes choppy scrolling.
@@ -126,9 +107,8 @@ class _FeedPageState extends State<FeedPage> {
 
   @override
   Widget build(BuildContext context) { // Removed Future and async
-    return Scaffold(
-      extendBodyBehindAppBar: true, // Allow body to show behind AppBar
-      // --- ADDED FLOATING ACTION BUTTON FOR ADMIN ---
+    return GlobalScaffold(
+      selectedIndex: 0,
       floatingActionButton: _isAdmin // Use the state variable
           ? FloatingActionButton(
               onPressed: () {
@@ -142,73 +122,6 @@ class _FeedPageState extends State<FeedPage> {
               child: const Icon(Icons.admin_panel_settings, color: Colors.black),
             )
           : null,
-      // ----------------------------------------------
-
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Center title if width is >= 600 (tablet/desktop breakpoint)
-            final bool centerOnWide = constraints.maxWidth >= 600;
-            
-            return AppBar(
-              title: Text(
-                '< < <',
-                style: TextStyle(
-                  fontSize: 40,
-                  fontWeight: FontWeight.bold,
-                  shadows: _titleShadows, // Use pre-initialized shadows
-                ),
-              ),
-              scrolledUnderElevation: 0,
-              backgroundColor: Colors.transparent, // Glassy effect handled by body stack
-              elevation: 0,
-              centerTitle: centerOnWide,
-              // flexibleSpace: Container(color: Colors.black),
-              // Removed bottom TabBar
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.event_note),
-                  tooltip: 'Notice Board',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const EventsPage()),
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.search),
-                  tooltip: 'Search Users',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const SearchPage()),
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.person),
-                  tooltip: 'Profile',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const ProfilePage()),
-                    );
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.logout, color: Colors.white70),
-                  tooltip: 'Logout',
-                  onPressed: () async {
-                    await FirebaseAuth.instance.signOut();
-                  },
-                ),
-              ],
-            );
-          },
-        ),
-      ),
       body: Stack(
         children: [
           // 1. Background Gradient
@@ -369,12 +282,14 @@ class PaginatedFeedList extends StatefulWidget {
   final Future<List<Post>> Function(Post? lastPost) fetchFunction;
   final String emptyMessage;
   final int pageSize; // Added parameter to handle dynamic limits
+  final Color themeColor; // Added for theming
 
   const PaginatedFeedList({
     super.key,
     required this.fetchFunction,
     required this.emptyMessage,
     this.pageSize = 10, // Default value
+    this.themeColor = Colors.redAccent, // Default value
   });
 
   @override
@@ -465,15 +380,16 @@ class _PaginatedFeedListState extends State<PaginatedFeedList> {
               itemCount: _posts.length + (_hasMore ? 1 : 0),
               itemBuilder: (context, index) {
                 if (index == _posts.length) {
-                  return const Center(child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(color: Colors.redAccent),
+                  return Center(child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(color: widget.themeColor), // Use theme color
                   ));
                 }
                 return RepaintBoundary(
                   child: PostWidget(
                     post: _posts[index],
                     userProfile: userProfile, // Pass the stream data down
+                    themeColor: widget.themeColor, // Pass theme color
                   ),
                 );
               },
