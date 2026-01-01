@@ -68,11 +68,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
     setState(() => _isLoading = true);
     try {
+      final username = _usernameController.text.trim();
+      
+      // Check uniqueness
+      final isTaken = await DatabaseService().isUsernameTaken(username);
+      if (isTaken) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Username is already taken. Please choose another.')));
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final newProfile = UserProfile(
           id: user.uid,
-          username: _usernameController.text.trim(),
+          username: username,
           fullName: _fullNameController.text.trim(),
           bio: _bioController.text.trim(),
           skills: _selectedSkills,

@@ -18,6 +18,9 @@ House of Innovation Hackathon Formalities
 - AI-powered skill matching
 - semester must be a number
 
+- Admin control: One post per day toggle. No more posts if limit has been reached or exceeded before toggle is on afterwards.
+- Confirmation before post.
+
 polish
 - ccc logo
 - Fonts

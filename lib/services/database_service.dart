@@ -56,6 +56,15 @@ class DatabaseService {
 
   // --- Users ---
 
+  Future<bool> isUsernameTaken(String username) async {
+    final query = await _db
+        .collection('users')
+        .where('username', isEqualTo: username)
+        .limit(1)
+        .get();
+    return query.docs.isNotEmpty;
+  }
+
   Future<void> createUserProfile(UserProfile user) async {
     await _db.collection('users').doc(user.id).set(user.toMap());
   }
@@ -143,10 +152,67 @@ class DatabaseService {
   // --- Posts ---
 
   Future<void> createPost(Post post) async {
-    // We let Firestore generate the ID, so we use .add() or .doc().set()
-    // Here we use the ID generated in the app or let firestore do it.
-    // Better to let firestore generate ID for posts.
-    await _db.collection('posts').add(post.toMap());
+    final batch = _db.batch();
+    
+    // 1. Calculate Streak FIRST (Fetch User Profile)
+    final userRef = _db.collection('users').doc(post.userId);
+    final userDoc = await userRef.get();
+    
+    int currentStreak = 0;
+    int highestStreak = 0;
+
+    if (userDoc.exists) {
+      final data = userDoc.data()!;
+      final lastPostTimestamp = data['lastPostDate'] as Timestamp?;
+      currentStreak = data['currentStreak'] ?? 0;
+      highestStreak = data['highestStreak'] ?? 0;
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      
+      if (lastPostTimestamp != null) {
+        final lastDate = lastPostTimestamp.toDate().toLocal(); // Ensure Local Time
+        final lastDateOnly = DateTime(lastDate.year, lastDate.month, lastDate.day);
+        final difference = today.difference(lastDateOnly).inDays;
+
+        if (difference == 1) {
+          // Posted yesterday, increment streak
+          currentStreak++;
+        } else if (difference > 1) {
+          // Missed a day, reset streak
+          currentStreak = 1;
+        }
+        
+        // Ensure streak is at least 1 if we are posting (even if difference is 0 but streak was 0)
+        if (currentStreak == 0) {
+          currentStreak = 1;
+        }
+      } else {
+        // First post ever
+        currentStreak = 1;
+      }
+
+      if (currentStreak > highestStreak) {
+        highestStreak = currentStreak;
+      }
+
+      batch.update(userRef, {
+        'currentStreak': currentStreak,
+        'highestStreak': highestStreak,
+        'lastPostDate': Timestamp.fromDate(now),
+      });
+    } else {
+      // Fallback for edge cases
+      currentStreak = 1;
+    }
+    
+    // 2. Create the post with the calculated streak
+    final postRef = _db.collection('posts').doc();
+    final postData = post.toMap();
+    postData['streak'] = currentStreak; // Store streak in post
+    batch.set(postRef, postData);
+
+    await batch.commit();
   }
 
   // Scalable Pagination: Global Feed
@@ -236,5 +302,25 @@ class DatabaseService {
       return user.fullName.toLowerCase().contains(lowerQuery) ||
              user.username.toLowerCase().contains(lowerQuery);
     }).toList();
+  }
+
+  // --- Events ---
+
+  Future<void> createEvent(Event event) async {
+    await _db.collection('events').add(event.toMap());
+  }
+
+  Future<void> deleteEvent(String eventId) async {
+    await _db.collection('events').doc(eventId).delete();
+  }
+
+  Stream<List<Event>> getEventsStream() {
+    return _db
+        .collection('events')
+        .orderBy('endDate', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => Event.fromMap(doc.id, doc.data())).toList();
+    });
   }
 }

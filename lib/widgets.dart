@@ -45,11 +45,27 @@ Color getTagColor(String tag) {
 }
 
 String _formatDate(DateTime date) {
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
-  return "${months[date.month - 1]} ${date.day}";
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final postDate = DateTime(date.year, date.month, date.day);
+  final difference = today.difference(postDate).inDays;
+
+  if (difference == 0) {
+    return "Today";
+  } else if (difference == 1) {
+    return "Yesterday";
+  } else if (difference < 7 && difference > 0) {
+    const weekdays = [
+      'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+    ];
+    return weekdays[date.weekday - 1];
+  } else {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return "${months[date.month - 1]} ${date.day}";
+  }
 }
 
 class GlassyContainer extends StatelessWidget {
@@ -117,8 +133,8 @@ class PostWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildPostContent(BuildContext context, UserProfile user) {
-    final isSaved = user.savedPostIds.contains(post.id);
+  Widget _buildPostContent(BuildContext context, UserProfile viewerProfile) {
+    final isSaved = viewerProfile.savedPostIds.contains(post.id);
     final isAnnouncement = post.username == 'admin';
 
     return Padding(
@@ -159,6 +175,21 @@ class PostWidget extends StatelessWidget {
                             '@${post.username}',
                             style: TextStyle(color: isAnnouncement ? Colors.amberAccent : Colors.redAccent, fontSize: 12),
                           ),
+                          // Streak Icon (From Post Data)
+                          if (!isAnnouncement && post.streak > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 6.0),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.local_fire_department, color: Colors.orange, size: 14),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    "${post.streak}",
+                                    style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
                     ],

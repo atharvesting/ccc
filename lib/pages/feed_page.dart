@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // Added for kIsWeb and defaultTargetPlatform
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:ui'; // For ImageFilter
 import '../models.dart';
@@ -9,6 +10,7 @@ import 'profile_page.dart';
 import 'create_post_page.dart';
 import 'search_page.dart';
 import 'admin_page.dart'; // <--- IMPORT ADDED HERE
+import 'events_page.dart'; // Import EventsPage
 import 'package:flutter/gestures.dart'; // Import for PointerScrollEvent
 
 class FeedPage extends StatefulWidget {
@@ -32,6 +34,17 @@ class _FeedPageState extends State<FeedPage> {
     begin: const Offset(0.0, 0.02),
     end: Offset.zero,
   );
+
+  bool get isDesktopLike {
+    if (kIsWeb) {
+      // treat web as desktop UI
+      return true;
+    }
+
+    return defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux; // non‑web desktop
+  }
 
   @override
   void initState() {
@@ -131,50 +144,70 @@ class _FeedPageState extends State<FeedPage> {
           : null,
       // ----------------------------------------------
 
-      appBar: AppBar(
-        title: Text(
-          '< < <',
-          style: TextStyle(
-            fontSize: 40,
-            fontWeight: FontWeight.bold,
-            shadows: _titleShadows, // Use pre-initialized shadows
-          ),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Center title if width is >= 600 (tablet/desktop breakpoint)
+            final bool centerOnWide = constraints.maxWidth >= 600;
+            
+            return AppBar(
+              title: Text(
+                '< < <',
+                style: TextStyle(
+                  fontSize: 40,
+                  fontWeight: FontWeight.bold,
+                  shadows: _titleShadows, // Use pre-initialized shadows
+                ),
+              ),
+              scrolledUnderElevation: 0,
+              backgroundColor: Colors.transparent, // Glassy effect handled by body stack
+              elevation: 0,
+              centerTitle: centerOnWide,
+              // flexibleSpace: Container(color: Colors.black),
+              // Removed bottom TabBar
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.event_note),
+                  tooltip: 'Notice Board',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const EventsPage()),
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Search Users',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SearchPage()),
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.person),
+                  tooltip: 'Profile',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const ProfilePage()),
+                    );
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.logout, color: Colors.white70),
+                  tooltip: 'Logout',
+                  onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                  },
+                ),
+              ],
+            );
+          },
         ),
-        scrolledUnderElevation: 0,
-        backgroundColor: Colors.transparent, // Glassy effect handled by body stack
-        elevation: 0,
-        centerTitle: true,
-        // flexibleSpace: Container(color: Colors.black),
-        // Removed bottom TabBar
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            tooltip: 'Search Users',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SearchPage()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.person),
-            tooltip: 'Profile',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white70),
-            tooltip: 'Logout',
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-            },
-          ),
-        ],
       ),
       body: Stack(
         children: [

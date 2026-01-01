@@ -12,3 +12,10 @@
 - Used AnimatedSwitcher to make transitions smoother.
 - Deployed the app successfully and diagnosed performance.
 - Made performance improvements.
+
+2025-12-28:
+- Changed the web name.
+- Implemented admin user state and controls.
+- Changed and polished the onboarding layout.
+- Added skill rating to onboarding as well as profile page.
+- Applied various performance improvements.

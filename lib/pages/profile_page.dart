@@ -281,356 +281,394 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text('Profile', style: textTheme.titleMedium),
-        backgroundColor: const Color.fromARGB(255, 43, 0, 0),
-        centerTitle: true,
-        elevation: 0,
-        actions: [
-          if (_isCurrentUser)
-            IconButton(
-              icon: Icon(_isEditing ? Icons.check : Icons.edit),
-              onPressed: () {
-                if (_isEditing) {
-                  _saveChanges();
-                } else {
-                  setState(() {
-                    _isEditing = true;
-                    // Reset editing state to current values
-                    _editingSkills = List.from(displayUser.skills);
-                    _fullNameController.text = displayUser.fullName;
-                    _semesterController.text = displayUser.currentSemester;
-                    _bioController.text = displayUser.bio;
-                  });
-                }
-              },
-            )
-        ],
-      ),
-      // Changed structure: SingleChildScrollView is now the parent of Center/ConstrainedBox
-      // This ensures the scrollbar is attached to the full screen width, not the centered column.
-      body: Stack(
-        children: [
-          // 1. Background Gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
-                colors: [
-                  Color(0xFF121212), // Middle: Darker
-                  Color(0xFF2C0000), // Edges: Lighter/Redder
-                ],
-                stops: [0.0, 1.0],
-              ),
-            ),
+    return StreamBuilder<UserProfile>(
+      stream: DatabaseService().getUserProfileStream(displayUser.id),
+      initialData: displayUser,
+      builder: (context, snapshot) {
+        final user = snapshot.data ?? displayUser;
+
+        return Scaffold(
+          extendBodyBehindAppBar: true,
+          appBar: AppBar(
+            title: Text('Profile', style: textTheme.titleMedium),
+            backgroundColor: const Color.fromARGB(255, 43, 0, 0),
+            centerTitle: true,
+            elevation: 0,
+            actions: [
+              if (_isCurrentUser)
+                IconButton(
+                  icon: Icon(_isEditing ? Icons.check : Icons.edit),
+                  onPressed: () {
+                    if (_isEditing) {
+                      _saveChanges();
+                    } else {
+                      setState(() {
+                        _isEditing = true;
+                        // Reset editing state to current values from stream
+                        _editingSkills = List.from(user.skills);
+                        _fullNameController.text = user.fullName;
+                        _semesterController.text = user.currentSemester;
+                        _bioController.text = user.bio;
+                      });
+                    }
+                  },
+                )
+            ],
           ),
-          // 2. Decorative Circles - Blurred AF
-          Positioned(
-            top: -100,
-            right: -100,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.redAccent.withValues(alpha: 0.2),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 100,
-            left: -50,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.red.withValues(alpha: 0.15),
-                ),
-              ),
-            ),
-          ),
-          // 3. Content
-          SingleChildScrollView(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 800),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Spacer for AppBar
-                      const SizedBox(height: kToolbarHeight + 20),
-                      // Redesigned Profile Header
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.redAccent.withValues(alpha: 0.15),
-                              blurRadius: 40,
-                              spreadRadius: 0,
-                            ),
-                          ],
-                          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.1)),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            // Left Column: Identity
-                            Expanded(
-                              flex: 2,
-                              child: Column(
-                                children: [
-                                  const CircleAvatar(
-                                    radius: 60,
-                                    backgroundColor: Colors.redAccent,
-                                    child: Icon(Icons.person_4, size: 40, color: Colors.white),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  _isEditing
-                                      ? TextField(
-                                          controller: _fullNameController,
-                                          textAlign: TextAlign.center,
-                                          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                                          decoration: const InputDecoration(
-                                            hintText: "Full Name",
-                                            border: InputBorder.none,
-                                            isDense: true,
-                                          ),
-                                        )
-                                      : Text(
-                                          displayUser.fullName,
-                                          textAlign: TextAlign.center,
-                                          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                                        ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "@${displayUser.username}",
-                                    style: textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  if (!_isCurrentUser)
-                                    ElevatedButton(
-                                      onPressed: _toggleFollow,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: currentUser.following.contains(displayUser.id) ? Colors.grey : Colors.redAccent,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
-                                      ),
-                                      child: Text(currentUser.following.contains(displayUser.id) ? "Unfollow" : "Follow", style: const TextStyle(color: Colors.white)),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            
-                            const SizedBox(width: 24),
-                            
-                            // Right Column: Details
-                            Expanded(
-                              flex: 3,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Bio
-                                  _isEditing
-                                      ? TextField(
-                                          controller: _bioController,
-                                          readOnly: true,
-                                          onTap: _showBioEditorDialog,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Bio (Tap to edit)',
-                                            border: OutlineInputBorder(),
-                                            isDense: true,
-                                            suffixIcon: Icon(Icons.open_in_full, size: 16),
-                                          ),
-                                          maxLines: 3,
-                                          style: textTheme.bodyMedium,
-                                        )
-                                      : Text(
-                                          _bioController.text.isEmpty ? "No bio yet." : _bioController.text,
-                                          style: textTheme.bodyLarge?.copyWith(color: Colors.white70),
-                                        ),
-                                
-                                  const SizedBox(height: 16),
-
-                                  // Metadata Row
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                    children: [
-                                      _isEditing 
-                                      ? SizedBox(
-                                          width: 80,
-                                          child: TextField(
-                                            controller: _semesterController,
-                                            decoration: InputDecoration(
-                                              labelText: "Semester",
-                                              isDense: true,
-                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
-                                            ),
-                                            style: textTheme.bodySmall,
-                                          ),
-                                        )
-                                      : Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.05),
-                                            borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-                                          ),
-                                          child: Text("Semester ${displayUser.currentSemester}", style: textTheme.bodySmall),
-                                        ),
-                                      
-                                      if (displayUser.openToCollaborate)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: Colors.green.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-                                            border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(Icons.handshake, size: 12, color: Colors.greenAccent),
-                                              const SizedBox(width: 4),
-                                              Text("Open to Collaborate", style: textTheme.bodySmall?.copyWith(color: Colors.greenAccent)),
-                                            ],
-                                          ),
-                                        ),
-
-                                      if (displayUser.phoneNumber != null && displayUser.phoneNumber!.isNotEmpty)
-                                        Text("📞 ${displayUser.phoneNumber}", style: textTheme.bodySmall?.copyWith(color: Colors.white54)),
-                                    ],
-                                  ),
-
-                                  const SizedBox(height: 16),
-
-                                  // Skills (Only show here if editing)
-                                  if (_isEditing) ...[
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: TextField(
-                                            controller: _skillInputController,
-                                            style: textTheme.bodySmall,
-                                            decoration: InputDecoration(
-                                              labelText: 'Add skill',
-                                              isDense: true,
-                                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
-                                            ),
-                                            onSubmitted: (_) => _addSkill(),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(kAppCornerRadius),
-                                          ),
-                                          child: DropdownButtonHideUnderline(
-                                            child: DropdownButton<int>(
-                                              value: _newSkillRating,
-                                              dropdownColor: const Color(0xFF1A1A1A),
-                                              icon: const Icon(Icons.star, color: Colors.amber, size: 20),
-                                              items: [1, 2, 3, 4, 5].map((r) => DropdownMenuItem(
-                                                value: r,
-                                                child: Text(r.toString(), style: const TextStyle(color: Colors.white)),
-                                              )).toList(),
-                                              onChanged: (val) => setState(() => _newSkillRating = val!),
-                                            ),
-                                          ),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.add_circle, color: Colors.redAccent),
-                                          onPressed: _addSkill,
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 6,
-                                      children: _editingSkills.map((rawSkill) {
-                                        final (name, rating) = _parseSkill(rawSkill);
-                                        final color = getTagColor(name);
-                                        return Chip(
-                                          label: Text("$name ($rating/5)", style: TextStyle(fontSize: 14, color: color)),
-                                          padding: EdgeInsets.zero,
-                                          visualDensity: VisualDensity.compact,
-                                          backgroundColor: color.withValues(alpha: 0.15),
-                                          side: BorderSide(color: color.withValues(alpha: 0.3)),
-                                          onDeleted: () => _removeSkill(rawSkill),
-                                          deleteIcon: Icon(Icons.close, size: 12, color: color),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Skill Graph (View Mode Only)
-                      if (!_isEditing && displayUser.skills.isNotEmpty) ...[
-                         _buildSkillGraph(displayUser.skills),
-                         const SizedBox(height: 24),
-                      ],
-                      
-                      // Tabs for Posts / Saved
-                      if (_isCurrentUser)
-                        Row(
-                          children: [
-                            _buildTabButton(0, "My Posts"),
-                            _buildTabButton(1, "Saved"),
-                          ],
-                        ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      // Content based on Tab
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 400),
-                        switchInCurve: Curves.easeOut,
-                        switchOutCurve: Curves.easeIn,
-                        transitionBuilder: (Widget child, Animation<double> animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0.0, 0.02),
-                                end: Offset.zero,
-                              ).animate(animation),
-                              child: child,
-                            ),
-                          );
-                        },
-                        child: _buildPostList(),
-                      ),
+          // Changed structure: SingleChildScrollView is now the parent of Center/ConstrainedBox
+          // This ensures the scrollbar is attached to the full screen width, not the centered column.
+          body: Stack(
+            children: [
+              // 1. Background Gradient
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment.center,
+                    radius: 1.2,
+                    colors: [
+                      Color(0xFF121212), // Middle: Darker
+                      Color(0xFF2C0000), // Edges: Lighter/Redder
                     ],
+                    stops: [0.0, 1.0],
                   ),
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
+              // 2. Decorative Circles - Blurred AF
+              Positioned(
+                top: -100,
+                right: -100,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                  child: Container(
+                    width: 300,
+                    height: 300,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.redAccent.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 100,
+                left: -50,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+                  child: Container(
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.red.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
+              ),
+              // 3. Content
+              SingleChildScrollView(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Spacer for AppBar
+                          const SizedBox(height: kToolbarHeight + 20),
+                          // Redesigned Profile Header
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.redAccent.withValues(alpha: 0.15),
+                                  blurRadius: 40,
+                                  spreadRadius: 0,
+                                ),
+                              ],
+                              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.1)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                // Left Column: Identity
+                                Expanded(
+                                  flex: 2,
+                                  child: Column(
+                                    children: [
+                                      const CircleAvatar(
+                                        radius: 60,
+                                        backgroundColor: Colors.redAccent,
+                                        child: Icon(Icons.person_4, size: 40, color: Colors.white),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      _isEditing
+                                          ? TextField(
+                                              controller: _fullNameController,
+                                              textAlign: TextAlign.center,
+                                              style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                                              decoration: const InputDecoration(
+                                                hintText: "Full Name",
+                                                border: InputBorder.none,
+                                                isDense: true,
+                                              ),
+                                            )
+                                          : Text(
+                                              user.fullName,
+                                              textAlign: TextAlign.center,
+                                              style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                                            ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "@${user.username}",
+                                        style: textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      if (!_isCurrentUser)
+                                        ElevatedButton(
+                                          onPressed: _toggleFollow,
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: currentUser.following.contains(user.id) ? Colors.grey : Colors.redAccent,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
+                                          ),
+                                          child: Text(currentUser.following.contains(user.id) ? "Unfollow" : "Follow", style: const TextStyle(color: Colors.white)),
+                                        ),
+                                  
+                                      // Streak Display
+                                      const SizedBox(height: 12),
+                                  
+                                    ],
+                                  ),
+                                ),
+                                
+                                const SizedBox(width: 24),
+                                
+                                // Right Column: Details
+                                Expanded(
+                                  flex: 3,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Bio
+                                      _isEditing
+                                          ? TextField(
+                                              controller: _bioController,
+                                              readOnly: true,
+                                              onTap: _showBioEditorDialog,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Bio (Tap to edit)',
+                                                border: OutlineInputBorder(),
+                                                isDense: true,
+                                                suffixIcon: Icon(Icons.open_in_full, size: 16),
+                                              ),
+                                              maxLines: 3,
+                                              style: textTheme.bodyMedium,
+                                            )
+                                          : Text(
+                                              user.bio.isEmpty ? "No bio yet." : user.bio,
+                                              style: textTheme.bodyLarge?.copyWith(color: Colors.white70),
+                                            ),
+                                
+                                      const SizedBox(height: 16),
+
+                                      // Metadata Row
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        children: [
+                                          _isEditing 
+                                          ? SizedBox(
+                                              width: 80,
+                                              child: TextField(
+                                                controller: _semesterController,
+                                                decoration: InputDecoration(
+                                                  labelText: "Semester",
+                                                  isDense: true,
+                                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)), // Using global constant
+                                                ),
+                                                style: textTheme.bodySmall,
+                                              ),
+                                            )
+                                          : Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withValues(alpha: 0.05),
+                                                borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
+                                              ),
+                                              child: Text("Semester ${user.currentSemester}", style: textTheme.bodySmall),
+                                            ),
+                                          
+                                          if (user.openToCollaborate)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.green.withValues(alpha: 0.2),
+                                                borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
+                                                border: Border.all(color: Colors.green.withValues(alpha: 0.5)),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.handshake, size: 12, color: Colors.greenAccent),
+                                                  const SizedBox(width: 4),
+                                                  Text("Open to Collaborate", style: textTheme.bodySmall?.copyWith(color: Colors.greenAccent)),
+                                                ],
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(kAppCornerRadius),
+                                                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.local_fire_department, color: Colors.orange, size: 18),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    "${user.currentStreak} Day Streak",
+                                                    style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12),
+                                                  ),
+                                                  if (user.highestStreak > 0) ...[
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      "(Best: ${user.highestStreak})",
+                                                      style: TextStyle(color: Colors.orange.withValues(alpha: 0.6), fontSize: 10),
+                                                    ),
+                                                  ]
+                                                ],
+                                              ),
+                                            ),
+
+                                          if (user.phoneNumber != null && user.phoneNumber!.isNotEmpty)
+                                            Text("📞 ${user.phoneNumber}", style: textTheme.bodySmall?.copyWith(color: Colors.white54)),
+                                        ],
+                                      ),
+
+                                      const SizedBox(height: 16),
+
+                                      // Skills (Only show here if editing)
+                                      if (_isEditing) ...[
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextField(
+                                                controller: _skillInputController,
+                                                style: textTheme.bodySmall,
+                                                decoration: InputDecoration(
+                                                  labelText: 'Add skill',
+                                                  isDense: true,
+                                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+                                                ),
+                                                onSubmitted: (_) => _addSkill(),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white.withValues(alpha: 0.1),
+                                                borderRadius: BorderRadius.circular(kAppCornerRadius),
+                                              ),
+                                              child: DropdownButtonHideUnderline(
+                                                child: DropdownButton<int>(
+                                                  value: _newSkillRating,
+                                                  dropdownColor: const Color(0xFF1A1A1A),
+                                                  icon: const Icon(Icons.star, color: Colors.amber, size: 20),
+                                                  items: [1, 2, 3, 4, 5].map((r) => DropdownMenuItem(
+                                                    value: r,
+                                                    child: Text(r.toString(), style: const TextStyle(color: Colors.white)),
+                                                  )).toList(),
+                                                  onChanged: (val) => setState(() => _newSkillRating = val!),
+                                                ),
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.add_circle, color: Colors.redAccent),
+                                              onPressed: _addSkill,
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: _editingSkills.map((rawSkill) {
+                                            final (name, rating) = _parseSkill(rawSkill);
+                                            final color = getTagColor(name);
+                                            return Chip(
+                                              label: Text("$name ($rating/5)", style: TextStyle(fontSize: 14, color: color)),
+                                              padding: EdgeInsets.zero,
+                                              visualDensity: VisualDensity.compact,
+                                              backgroundColor: color.withValues(alpha: 0.15),
+                                              side: BorderSide(color: color.withValues(alpha: 0.3)),
+                                              onDeleted: () => _removeSkill(rawSkill),
+                                              deleteIcon: Icon(Icons.close, size: 12, color: color),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Skill Graph (View Mode Only)
+                          if (!_isEditing && user.skills.isNotEmpty) ...[
+                             _buildSkillGraph(user.skills),
+                             const SizedBox(height: 24),
+                          ],
+                          
+                          // Tabs for Posts / Saved
+                          if (_isCurrentUser)
+                            Row(
+                              children: [
+                                _buildTabButton(0, "My Posts"),
+                                _buildTabButton(1, "Saved"),
+                              ],
+                            ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // Content based on Tab
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 400),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            transitionBuilder: (Widget child, Animation<double> animation) {
+                              return FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: const Offset(0.0, 0.02),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
+                              );
+                            },
+                            child: _buildPostList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        );
+      }
     );
   }
 

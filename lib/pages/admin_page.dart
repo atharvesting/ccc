@@ -152,6 +152,13 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  void _showCreateEventDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const CreateEventDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -228,14 +235,27 @@ class _AdminPageState extends State<AdminPage> {
                       children: [
                         const SizedBox(height: kToolbarHeight + 20),
                         
+                        // Section 0: Event Management (New)
+                        _buildSection(
+                          title: "Event Management",
+                          icon: Icons.event,
+                          color: Colors.green,
+                          children: [
+                            _buildButton("Create New Event", Icons.add_circle_outline, Colors.green.withValues(alpha: 0.2), Colors.greenAccent, _showCreateEventDialog),
+                          ]
+                        ),
+
+                        const SizedBox(height: 24),
+
                         // Section 1: Announcement
                         _buildSection(
-                          title: "📢 Create Announcement",
+                          title: "Create Announcement",
+                          icon: Icons.campaign,
                           color: Colors.amber,
                           children: [
                             _buildTextField(_announcementController, "Announcement Text", maxLines: 3),
                             const SizedBox(height: 16),
-                            _buildButton("Post Announcement", Icons.campaign, Colors.amber, Colors.black, _postAnnouncement),
+                            _buildButton("Post Announcement", Icons.send, Colors.amber.withValues(alpha: 0.2), Colors.amber, _postAnnouncement),
                           ]
                         ),
 
@@ -243,7 +263,8 @@ class _AdminPageState extends State<AdminPage> {
 
                         // Section 2: Ban User (Updated with Search)
                         _buildSection(
-                          title: "🚫 Ban User",
+                          title: "Ban User",
+                          icon: Icons.block,
                           color: Colors.redAccent,
                           children: [
                             _buildUserSearchSection(
@@ -258,9 +279,9 @@ class _AdminPageState extends State<AdminPage> {
                             const SizedBox(height: 16),
                             _buildButton(
                               "Delete User & Data", 
-                              Icons.person_off, 
-                              Colors.red[900]!, 
-                              Colors.white, 
+                              Icons.delete_forever, 
+                              Colors.red.withValues(alpha: 0.2), 
+                              Colors.redAccent, 
                               _selectedBanUser != null ? _confirmAndBanUser : null
                             ),
                           ]
@@ -270,7 +291,8 @@ class _AdminPageState extends State<AdminPage> {
 
                         // Section 3: Transfer Admin (New)
                         _buildSection(
-                          title: "👑 Transfer Admin Rights",
+                          title: "Transfer Admin Rights",
+                          icon: Icons.admin_panel_settings,
                           color: Colors.blueAccent,
                           children: [
                             const Text("Warning: You will lose admin access immediately.", style: TextStyle(color: Colors.white54, fontSize: 12)),
@@ -286,10 +308,10 @@ class _AdminPageState extends State<AdminPage> {
                             ),
                             const SizedBox(height: 16),
                             _buildButton(
-                              "Make Admin", 
-                              Icons.verified_user, 
-                              Colors.blue[900]!, 
-                              Colors.white, 
+                              "Transfer Rights", 
+                              Icons.swap_horiz, 
+                              Colors.blue.withValues(alpha: 0.2), 
+                              Colors.blueAccent, 
                               _selectedAdminUser != null ? _confirmAndTransferAdmin : null
                             ),
                           ]
@@ -299,12 +321,13 @@ class _AdminPageState extends State<AdminPage> {
 
                         // Section 4: Delete Post
                         _buildSection(
-                          title: "🗑️ Delete Post",
-                          color: Colors.redAccent,
+                          title: "Delete Post",
+                          icon: Icons.remove_circle_outline,
+                          color: Colors.orangeAccent,
                           children: [
                             _buildTextField(_postIdController, "Target Post ID"),
                             const SizedBox(height: 16),
-                            _buildButton("Delete Post", Icons.delete_forever, Colors.red[900]!, Colors.white, _deletePost),
+                            _buildButton("Delete Post", Icons.delete, Colors.orange.withValues(alpha: 0.2), Colors.orangeAccent, _deletePost),
                           ]
                         ),
                         
@@ -399,7 +422,7 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  Widget _buildSection({required String title, required Color color, required List<Widget> children}) {
+  Widget _buildSection({required String title, required IconData icon, required Color color, required List<Widget> children}) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -417,7 +440,13 @@ class _AdminPageState extends State<AdminPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+          Row(
+            children: [
+              Icon(icon, color: color, size: 24),
+              const SizedBox(width: 12),
+              Text(title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+            ],
+          ),
           const SizedBox(height: 16),
           ...children,
         ],
@@ -465,6 +494,254 @@ class _AdminPageState extends State<AdminPage> {
           disabledForegroundColor: Colors.white30,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+        ),
+      ),
+    );
+  }
+}
+
+class CreateEventDialog extends StatefulWidget {
+  const CreateEventDialog({super.key});
+
+  @override
+  State<CreateEventDialog> createState() => _CreateEventDialogState();
+}
+
+class _CreateEventDialogState extends State<CreateEventDialog> {
+  final _titleController = TextEditingController();
+  final _descController = TextEditingController();
+  final _venueController = TextEditingController();
+  
+  // Contacts
+  final _contactLabelController = TextEditingController();
+  final _contactInfoController = TextEditingController();
+  final List<EventContact> _contacts = [];
+
+  // Links
+  final _linkLabelController = TextEditingController();
+  final _linkUrlController = TextEditingController();
+  final List<EventLink> _links = [];
+
+  DateTime? _startDate;
+  DateTime? _endDate;
+  bool _isSubmitting = false;
+
+  Future<void> _selectDate(bool isStart) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.redAccent,
+              onPrimary: Colors.white,
+              surface: Color(0xFF1A1A1A),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          _startDate = picked;
+        } else {
+          _endDate = picked;
+        }
+      });
+    }
+  }
+
+  void _addContact() {
+    if (_contactLabelController.text.trim().isNotEmpty && _contactInfoController.text.trim().isNotEmpty) {
+      setState(() {
+        _contacts.add(EventContact(
+          label: _contactLabelController.text.trim(),
+          info: _contactInfoController.text.trim()
+        ));
+        _contactLabelController.clear();
+        _contactInfoController.clear();
+      });
+    }
+  }
+
+  void _addLink() {
+    if (_linkLabelController.text.trim().isNotEmpty && _linkUrlController.text.trim().isNotEmpty) {
+      setState(() {
+        _links.add(EventLink(label: _linkLabelController.text.trim(), url: _linkUrlController.text.trim()));
+        _linkLabelController.clear();
+        _linkUrlController.clear();
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_titleController.text.isEmpty || _descController.text.isEmpty || _venueController.text.isEmpty || _endDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all mandatory fields (Title, Desc, Venue, End Date)")));
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final event = Event(
+        id: '', // Generated by Firestore
+        title: _titleController.text.trim(),
+        description: _descController.text.trim(),
+        venue: _venueController.text.trim(),
+        contacts: _contacts,
+        links: _links,
+        startDate: _startDate,
+        endDate: _endDate!,
+      );
+
+      await DatabaseService().createEvent(event);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Event Created Successfully")));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+      title: const Text("Create New Event", style: TextStyle(color: Colors.white)),
+      content: SizedBox(
+        width: 600,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTextField(_titleController, "Title *"),
+              const SizedBox(height: 12),
+              _buildTextField(_descController, "Description *", maxLines: 3),
+              const SizedBox(height: 12),
+              _buildTextField(_venueController, "Venue *"),
+              const SizedBox(height: 16),
+              
+              // Dates
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateSelector("Start Date (Opt)", _startDate, () => _selectDate(true)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildDateSelector("End Date *", _endDate, () => _selectDate(false)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Contacts
+              const Text("Contacts", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(flex: 1, child: _buildTextField(_contactLabelController, "Label (e.g. Role)")),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 2, child: _buildTextField(_contactInfoController, "Info (e.g. Name - Phone)")),
+                  IconButton(icon: const Icon(Icons.add_circle, color: Colors.greenAccent), onPressed: _addContact),
+                ],
+              ),
+              Wrap(
+                spacing: 8,
+                children: _contacts.map((c) => Chip(
+                  label: Text("${c.label}: ${c.info}"),
+                  backgroundColor: Colors.white10,
+                  deleteIcon: const Icon(Icons.close, size: 12),
+                  onDeleted: () => setState(() => _contacts.remove(c)),
+                )).toList(),
+              ),
+              const SizedBox(height: 16),
+
+              // Links
+              const Text("Links", style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(flex: 1, child: _buildTextField(_linkLabelController, "Label")),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 2, child: _buildTextField(_linkUrlController, "URL")),
+                  IconButton(icon: const Icon(Icons.add_circle, color: Colors.greenAccent), onPressed: _addLink),
+                ],
+              ),
+              Wrap(
+                spacing: 8,
+                children: _links.map((l) => Chip(
+                  label: Text(l.label),
+                  backgroundColor: Colors.white10,
+                  deleteIcon: const Icon(Icons.close, size: 12),
+                  onDeleted: () => setState(() => _links.remove(l)),
+                )).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+        ),
+        ElevatedButton(
+          onPressed: _isSubmitting ? null : _submit,
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+          child: _isSubmitting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text("Create Event"),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, {int maxLines = 1}) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.grey),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+        filled: true,
+        fillColor: Colors.black.withValues(alpha: 0.2),
+        isDense: true,
+      ),
+    );
+  }
+
+  Widget _buildDateSelector(String label, DateTime? date, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(kAppCornerRadius),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.white30),
+          borderRadius: BorderRadius.circular(kAppCornerRadius),
+          color: Colors.black.withValues(alpha: 0.2),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              date == null ? label : "${date.day}/${date.month}/${date.year}",
+              style: TextStyle(color: date == null ? Colors.grey : Colors.white),
+            ),
+            const Icon(Icons.calendar_today, size: 16, color: Colors.white54),
+          ],
         ),
       ),
     );
