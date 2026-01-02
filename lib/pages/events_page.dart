@@ -4,7 +4,6 @@ import '../models.dart';
 import '../services/database_service.dart';
 import '../widgets.dart'; // For kAppCornerRadius
 import '../data.dart'; // For currentUser
-// For EditEventRequestDialog
 
 class EventsPage extends StatefulWidget {
   const EventsPage({super.key});
@@ -598,8 +597,28 @@ class _CreateEventDialogState extends State<CreateEventDialog> {
       final isAdmin = await DatabaseService().isAdmin(currentUser.id);
       final isEditing = widget.eventToEdit != null;
 
+      // Determine creator info
+      String userId;
+      String userFullName;
+      String username;
+
+      if (isEditing) {
+        // Preserve existing creator info
+        userId = widget.eventToEdit!.userId;
+        userFullName = widget.eventToEdit!.userFullName;
+        username = widget.eventToEdit!.username;
+      } else {
+        // New event: Use current user info
+        userId = currentUser.id;
+        userFullName = currentUser.fullName;
+        username = currentUser.username;
+      }
+
       final event = Event(
-        id: widget.eventToEdit?.id ?? '', // Use existing ID if editing
+        id: widget.eventToEdit?.id ?? '', 
+        userId: userId,
+        userFullName: userFullName,
+        username: username,
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         venue: _venueController.text.trim(),

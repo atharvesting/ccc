@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart'; // Added import
+import 'dart:typed_data'; // Added import
 import '../models.dart';
 import '../data.dart';
 import '../widgets.dart';
@@ -15,7 +17,8 @@ class CreatePostDialog extends StatefulWidget {
 class _CreatePostDialogState extends State<CreatePostDialog> {
   final _contentController = TextEditingController();
   final List<String> _selectedTags = [];
-  final List<String> _attachedImages = [];
+  final List<Uint8List> _selectedImageBytes = []; // Store image bytes
+  final ImagePicker _picker = ImagePicker(); // Image picker instance
   bool _isSubmitting = false;
 
   final List<String> _availableTags = [
@@ -34,10 +37,68 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
     });
   }
 
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _selectedImageBytes.add(bytes);
+        });
+      }
+    } catch (e) {
+      print("Error picking image: $e");
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImageBytes.removeAt(index);
+    });
+  }
+
   Future<void> _submitPost() async {
     if (_contentController.text.isEmpty) return;
 
+    // Confirmation Dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+        title: const Text("Confirm Post", style: TextStyle(color: Colors.white)),
+        content: const Text("Are you sure you want to share this update?", style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Post", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
     setState(() => _isSubmitting = true);
+
+    // Upload Images
+    List<String> uploadedImageUrls = [];
+    try {
+      for (var bytes in _selectedImageBytes) {
+        String url = await DatabaseService().uploadImage(bytes, 'post_images');
+        uploadedImageUrls.add(url);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error uploading images: $e")));
+        setState(() => _isSubmitting = false);
+      }
+      return;
+    }
 
     final newPost = Post(
       id: '',
@@ -45,7 +106,7 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
       username: currentUser.username,
       userFullName: currentUser.fullName,
       content: _contentController.text,
-      imageUrls: List.from(_attachedImages),
+      imageUrls: uploadedImageUrls,
       tags: List.from(_selectedTags),
       timestamp: DateTime.now(),
       communityId: widget.communityId, // Pass community ID
@@ -123,6 +184,42 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
                               border: InputBorder.none,
                             ),
                           ),
+                          const SizedBox(height: 10),
+
+                          // Image Preview Area
+                          if (_selectedImageBytes.isNotEmpty)
+                            SizedBox(
+                              height: 80,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _selectedImageBytes.length,
+                                itemBuilder: (context, index) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: Stack(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.memory(_selectedImageBytes[index], height: 80, width: 80, fit: BoxFit.cover),
+                                        ),
+                                        Positioned(
+                                          top: 0,
+                                          right: 0,
+                                          child: GestureDetector(
+                                            onTap: () => _removeImage(index),
+                                            child: Container(
+                                              color: Colors.black54,
+                                              child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          
                           const SizedBox(height: 20),
                           
                           // Tags
@@ -171,6 +268,13 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
                           child: const Text("Cancel"),
                         ),
                         const SizedBox(width: 16),
+                        // Add Image Button
+                        IconButton(
+                          onPressed: _isSubmitting ? null : _pickImage,
+                          icon: const Icon(Icons.image, color: Colors.white70),
+                          tooltip: "Add Image",
+                        ),
+                        const SizedBox(width: 8),
                         ElevatedButton.icon(
                           onPressed: _isSubmitting ? null : _submitPost,
                           icon: _isSubmitting 

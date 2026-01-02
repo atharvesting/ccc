@@ -126,10 +126,6 @@ class AuthPage extends StatelessWidget {
                       providers: [
                         EmailAuthProvider(),
                       ],
-                      actions: [
-                        AuthStateChangeAction<SignedIn>((context, state) {}),
-                        AuthStateChangeAction<UserCreated>((context, state) {}),
-                      ],
                       subtitleBuilder: (context, action) {
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),

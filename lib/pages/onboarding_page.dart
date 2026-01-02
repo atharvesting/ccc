@@ -88,7 +88,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           fullName: _fullNameController.text.trim(),
           bio: _bioController.text.trim(),
           skills: _selectedSkills,
-          currentSemester: _semesterController.text.trim(),
+          currentSemester: int.tryParse(_semesterController.text.trim()) ?? 1, // Parse String to int
           openToCollaborate: _openToCollaborate,
           phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
         );
@@ -106,7 +106,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) { // Added mounted check
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -198,158 +200,168 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 constraints: const BoxConstraints(maxWidth: 800),
                 child: GlassyContainer(
                   padding: 32,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Center(
-                        child: Text(
-                          "Setup Your Profile", 
-                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)
-                        ),
-                      ),
-                      const SizedBox(height: 32),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth > 600;
                       
-                      // Row 1: Identity
-                      Row(
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Expanded(child: _buildTextField(_fullNameController, "Full Name", Icons.badge, required: true)),
-                          const SizedBox(width: 16),
-                          Expanded(child: _buildTextField(_usernameController, "Username", Icons.person, required: true)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Row 2: Contact & Info
-                      Row(
-                        children: [
-                          Expanded(child: _buildTextField(_semesterController, "Semester", Icons.school, required: true)),
-                          const SizedBox(width: 16),
-                          Expanded(child: _buildTextField(_phoneController, "Phone", Icons.phone)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Bio
-                      TextField(
-                        controller: _bioController,
-                        maxLines: 2,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'Bio',
-                          labelStyle: const TextStyle(color: Colors.white54),
-                          hintText: 'Tell us a bit about yourself...',
-                          hintStyle: const TextStyle(color: Colors.white24),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
-                          filled: true,
-                          fillColor: Colors.black.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Collaboration Switch
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(kAppCornerRadius),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                        ),
-                        child: SwitchListTile(
-                          title: const Text("Open to Collaborate?", style: TextStyle(color: Colors.white)),
-                          subtitle: const Text("Show a badge on your profile", style: TextStyle(color: Colors.white54, fontSize: 12)),
-                          value: _openToCollaborate,
-                          activeThumbColor: Colors.greenAccent,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                          onChanged: (val) => setState(() => _openToCollaborate = val),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 24),
-                      const Text("Skills & Ratings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                      const SizedBox(height: 12),
-
-                      // Skill Input Row
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: _buildTextField(_skillInputController, "Add Skill", Icons.code),
+                          const Center(
+                            child: Text(
+                              "Setup Your Profile", 
+                              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)
+                            ),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(height: 32),
+                          
+                          // Row 1: Identity
+                          if (isWide)
+                            Row(
+                              children: [
+                                Expanded(child: _buildTextField(_fullNameController, "Full Name", Icons.badge, required: true)),
+                                const SizedBox(width: 16),
+                                Expanded(child: _buildTextField(_usernameController, "Username", Icons.person, required: true)),
+                              ],
+                            )
+                          else ...[
+                            _buildTextField(_fullNameController, "Full Name", Icons.badge, required: true),
+                            const SizedBox(height: 16),
+                            _buildTextField(_usernameController, "Username", Icons.person, required: true),
+                          ],
+                          const SizedBox(height: 16),
+
+                          // Row 2: Contact & Info
+                          if (isWide)
+                            Row(
+                              children: [
+                                Expanded(child: _buildTextField(_semesterController, "Semester", Icons.school, required: true)),
+                                const SizedBox(width: 16),
+                                Expanded(child: _buildTextField(_phoneController, "Phone", Icons.phone)),
+                              ],
+                            )
+                          else ...[
+                            _buildTextField(_semesterController, "Semester", Icons.school, required: true),
+                            const SizedBox(height: 16),
+                            _buildTextField(_phoneController, "Phone", Icons.phone),
+                          ],
+                          const SizedBox(height: 16),
+
+                          // Bio
+                          TextField(
+                            controller: _bioController,
+                            maxLines: 2,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Bio',
+                              labelStyle: const TextStyle(color: Colors.white54),
+                              hintText: 'Tell us a bit about yourself...',
+                              hintStyle: const TextStyle(color: Colors.white24),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+                              filled: true,
+                              fillColor: Colors.black.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Collaboration Switch
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(kAppCornerRadius),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                             ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                value: _newSkillRating,
-                                dropdownColor: const Color(0xFF2A2A2A),
-                                icon: const Icon(Icons.star, color: Colors.amber, size: 20),
-                                items: [1, 2, 3, 4, 5].map((r) => DropdownMenuItem(
-                                  value: r,
-                                  child: Text(r.toString(), style: const TextStyle(color: Colors.white)),
-                                )).toList(),
-                                onChanged: (val) => setState(() => _newSkillRating = val!),
-                              ),
+                            child: SwitchListTile(
+                              title: const Text("Open to Collaborate?", style: TextStyle(color: Colors.white)),
+                              subtitle: const Text("Show a badge on your profile", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                              value: _openToCollaborate,
+                              activeThumbColor: Colors.greenAccent,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                              onChanged: (val) => setState(() => _openToCollaborate = val),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          IconButton.filled(
-                            onPressed: _addSkill,
-                            icon: const Icon(Icons.add),
-                            style: IconButton.styleFrom(backgroundColor: Colors.redAccent),
+                          
+                          const SizedBox(height: 24),
+                          const Text("Skills & Ratings", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                          const SizedBox(height: 12),
+
+                          // Skill Input Row
+                          if (isWide)
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildTextField(_skillInputController, "Add Skill", Icons.code),
+                                ),
+                                const SizedBox(width: 12),
+                                _buildRatingDropdown(),
+                                const SizedBox(width: 12),
+                                _buildAddSkillButton(),
+                              ],
+                            )
+                          else
+                            Column(
+                              children: [
+                                _buildTextField(_skillInputController, "Add Skill", Icons.code),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(child: _buildRatingDropdown()),
+                                    const SizedBox(width: 12),
+                                    _buildAddSkillButton(),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          const SizedBox(height: 16),
+
+                          // Skills Wrap
+                          if (_selectedSkills.isNotEmpty)
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _selectedSkills.map((rawSkill) {
+                                final (name, rating) = _parseSkill(rawSkill);
+                                final color = getTagColor(name);
+                                return Chip(
+                                  label: Text("$name ($rating/5)", style: TextStyle(fontSize: 12, color: color)),
+                                  padding: EdgeInsets.zero,
+                                  visualDensity: VisualDensity.compact,
+                                  backgroundColor: color.withValues(alpha: 0.15),
+                                  side: BorderSide(color: color.withValues(alpha: 0.3)),
+                                  onDeleted: () => _removeSkill(rawSkill),
+                                  deleteIcon: Icon(Icons.close, size: 14, color: color),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+                                );
+                              }).toList(),
+                            )
+                          else
+                            const Text("No skills added yet.", style: TextStyle(color: Colors.white24, fontStyle: FontStyle.italic)),
+
+                          const SizedBox(height: 32),
+                          
+                          // Submit Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: _isLoading
+                              ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
+                              : ElevatedButton(
+                                  onPressed: _completeOnboarding,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.redAccent,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 20),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+                                    elevation: 5,
+                                    shadowColor: Colors.redAccent.withValues(alpha: 0.4),
+                                  ),
+                                  child: const Text("COMPLETE SETUP", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                                ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Skills Wrap
-                      if (_selectedSkills.isNotEmpty)
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: _selectedSkills.map((rawSkill) {
-                            final (name, rating) = _parseSkill(rawSkill);
-                            final color = getTagColor(name);
-                            return Chip(
-                              label: Text("$name ($rating/5)", style: TextStyle(fontSize: 12, color: color)),
-                              padding: EdgeInsets.zero,
-                              visualDensity: VisualDensity.compact,
-                              backgroundColor: color.withValues(alpha: 0.15),
-                              side: BorderSide(color: color.withValues(alpha: 0.3)),
-                              onDeleted: () => _removeSkill(rawSkill),
-                              deleteIcon: Icon(Icons.close, size: 14, color: color),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
-                            );
-                          }).toList(),
-                        )
-                      else
-                        const Text("No skills added yet.", style: TextStyle(color: Colors.white24, fontStyle: FontStyle.italic)),
-
-                      const SizedBox(height: 32),
-                      
-                      // Submit Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: _isLoading
-                          ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
-                          : ElevatedButton(
-                              onPressed: _completeOnboarding,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.redAccent,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 20),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
-                                elevation: 5,
-                                shadowColor: Colors.redAccent.withValues(alpha: 0.4),
-                              ),
-                              child: const Text("COMPLETE SETUP", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                            ),
-                      ),
-                    ],
+                      );
+                    }
                   ),
                 ),
               ),
@@ -357,6 +369,38 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildRatingDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(kAppCornerRadius),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: _newSkillRating,
+          dropdownColor: const Color(0xFF2A2A2A),
+          icon: const Icon(Icons.star, color: Colors.amber, size: 20),
+          isExpanded: true, // Ensure it takes available width in mobile layout
+          items: [1, 2, 3, 4, 5].map((r) => DropdownMenuItem(
+            value: r,
+            child: Text(r.toString(), style: const TextStyle(color: Colors.white)),
+          )).toList(),
+          onChanged: (val) => setState(() => _newSkillRating = val!),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddSkillButton() {
+    return IconButton.filled(
+      onPressed: _addSkill,
+      icon: const Icon(Icons.add),
+      style: IconButton.styleFrom(backgroundColor: Colors.redAccent),
     );
   }
 }

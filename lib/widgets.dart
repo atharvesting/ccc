@@ -10,6 +10,7 @@ import 'pages/events_page.dart';
 import 'pages/skill_matching_page.dart';
 import 'pages/search_page.dart';
 import 'pages/auth_page.dart';
+import 'pages/admin_page.dart'; // Added import
 
 // Global Design Constant
 const double kAppCornerRadius = 5.0;
@@ -281,9 +282,38 @@ class PostWidget extends StatelessWidget {
                   itemBuilder: (context, index) {
                     return Padding(
                       padding: const EdgeInsets.only(right: 8.0),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-                        child: Image.network(post.imageUrls[index]),
+                      child: GestureDetector(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => Dialog(
+                              backgroundColor: Colors.transparent,
+                              insetPadding: EdgeInsets.zero,
+                              child: Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  InteractiveViewer(
+                                    minScale: 0.5,
+                                    maxScale: 4.0,
+                                    child: Image.network(post.imageUrls[index], fit: BoxFit.contain),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.close, color: Colors.white),
+                                      onPressed: () => Navigator.pop(context),
+                                      style: IconButton.styleFrom(backgroundColor: Colors.black54),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
+                          child: Image.network(post.imageUrls[index]),
+                        ),
                       ),
                     );
                   },
@@ -352,28 +382,59 @@ class GlobalScaffold extends StatelessWidget {
       extendBodyBehindAppBar: true,
       extendBody: true, // Allows body to extend behind the bottom bar
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '< < <',
-              style: TextStyle(
-                fontSize: 40,
-                fontWeight: FontWeight.bold,
-                shadows: kAppTitleShadows,
+        toolbarHeight: 60, // Increased height for floating effect
+        title: Container(
+          margin: const EdgeInsets.only(top: 10), // Push down from status bar
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.8),
+            borderRadius: BorderRadius.circular(50),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
               ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+          child: Text(
+            '< < <',
+            style: TextStyle(
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+              shadows: kAppTitleShadows,
+              height: 1.1, // Fix vertical alignment
             ),
-            // const SizedBox(width: 10),
-            // const Text("x BIT J", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),),
-          ],
+          ),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         // elevation: 0,
         foregroundColor: Colors.white,
         actions: [
+          // Admin Button Logic
+          FutureBuilder<bool>(
+            future: DatabaseService().isAdmin(currentUser.id),
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data == true) {
+                return IconButton(
+                  icon: const Icon(Icons.admin_panel_settings_rounded),
+                  tooltip: 'Admin Console',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const AdminPage()),
+                    );
+                  },
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white70),
+            icon: const Icon(Icons.logout, color: Colors.white),
             tooltip: 'Logout',
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
@@ -404,7 +465,7 @@ class GlobalScaffold extends StatelessWidget {
                   border: Border.all(color: Colors.white12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.5),
+                      color: Colors.black.withValues(alpha: 0.8),
                       blurRadius: 10,
                       offset: const Offset(0, 5),
                     ),
@@ -440,7 +501,7 @@ class GlobalScaffold extends StatelessWidget {
         alignment: Alignment.center,
         child: Icon(
           isSelected ? selectedIcon : icon,
-          color: isSelected ? Colors.redAccent : Colors.white54,
+          color: isSelected ? Colors.redAccent : Colors.white70,
           size: 26,
         ),
       ),

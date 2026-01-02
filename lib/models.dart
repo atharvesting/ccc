@@ -7,7 +7,7 @@ class UserProfile {
   String bio;
   final List<String> skills;
   final Map<String, int> skillRatings; // New: Rating for each skill (1-5)
-  final String currentSemester;
+  final int currentSemester;
   final bool openToCollaborate;
   final String? phoneNumber;
   final List<String> savedPostIds; // New: For "Like/Save" feature
@@ -54,6 +54,9 @@ class UserProfile {
       'currentStreak': currentStreak,
       'highestStreak': highestStreak,
       'lastPostDate': lastPostDate != null ? Timestamp.fromDate(lastPostDate!) : null,
+      // Search Indexing Fields (Lowercase for case-insensitive prefix search)
+      'search_username': username.toLowerCase(),
+      'search_fullName': fullName.toLowerCase(),
     };
   }
 
@@ -66,7 +69,10 @@ class UserProfile {
       bio: map['bio'] ?? '',
       skills: List<String>.from(map['skills'] ?? []),
       skillRatings: Map<String, int>.from(map['skillRatings'] ?? {}),
-      currentSemester: map['currentSemester'] ?? '',
+      // Fix: Safely parse currentSemester to int, handling String/Int mismatch
+      currentSemester: (map['currentSemester'] is int) 
+          ? map['currentSemester'] 
+          : int.tryParse(map['currentSemester']?.toString() ?? '1') ?? 1,
       openToCollaborate: map['openToCollaborate'] ?? false,
       phoneNumber: map['phoneNumber'],
       savedPostIds: List<String>.from(map['savedPostIds'] ?? []),
@@ -209,6 +215,9 @@ class EventContact {
 
 class Event {
   final String id;
+  final String userId; // Added
+  final String userFullName; // Added
+  final String username; // Added
   final String title;
   final String description;
   final List<EventContact> contacts;
@@ -220,6 +229,9 @@ class Event {
 
   Event({
     required this.id,
+    required this.userId, // Added
+    required this.userFullName, // Added
+    required this.username, // Added
     required this.title,
     required this.description,
     required this.contacts,
@@ -232,6 +244,9 @@ class Event {
 
   Map<String, dynamic> toMap() {
     return {
+      'userId': userId, // Added
+      'userFullName': userFullName, // Added
+      'username': username, // Added
       'title': title,
       'description': description,
       'contacts': contacts.map((c) => c.toMap()).toList(),
@@ -246,6 +261,9 @@ class Event {
   factory Event.fromMap(String id, Map<String, dynamic> map) {
     return Event(
       id: id,
+      userId: map['userId'] ?? '', // Added with default
+      userFullName: map['userFullName'] ?? 'Unknown', // Added with default
+      username: map['username'] ?? 'unknown', // Added with default
       title: map['title'] ?? '',
       description: map['description'] ?? '',
       contacts: (map['contacts'] as List<dynamic>?)

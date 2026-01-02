@@ -6,8 +6,6 @@ import '../data.dart'; // for currentUser
 import '../services/database_service.dart';
 import '../widgets.dart';
 import 'create_post_page.dart';
-import 'admin_page.dart'; // <--- IMPORT ADDED HERE
-// Import for PointerScrollEvent
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -18,7 +16,6 @@ class FeedPage extends StatefulWidget {
 
 class _FeedPageState extends State<FeedPage> {
   int _selectedIndex = 0;
-  bool _isAdmin = false; // Added state variable
   int _refreshCounter = 0; // Added to trigger feed refresh
 
   // Optimization: Move complex object creation out of build method to save CPU cycles
@@ -41,10 +38,27 @@ class _FeedPageState extends State<FeedPage> {
         defaultTargetPlatform == TargetPlatform.linux; // non‑web desktop
   }
 
+  // Helper to check if posted today
+  bool _hasPostedToday(DateTime? date) {
+    if (date == null) return false;
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
+  }
+
+  void _showLimitNotification() {
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _TopNotification(
+        message: "Daily limit reached! You can post again tomorrow.",
+        onDismiss: () => entry.remove(),
+      ),
+    );
+    Overlay.of(context).insert(entry);
+  }
+
   @override
   void initState() {
     super.initState();
-    _checkAdminStatus(); // Trigger async check
 
     // Optimization: Use BoxShadow for blur instead of ImageFiltered.
     // ImageFiltered with high sigma is very expensive and causes choppy scrolling.
@@ -71,15 +85,6 @@ class _FeedPageState extends State<FeedPage> {
         ),
       ],
     );
-  }
-
-  Future<void> _checkAdminStatus() async {
-    final isAdmin = await DatabaseService().isAdmin(currentUser.id);
-    if (mounted) {
-      setState(() {
-        _isAdmin = isAdmin;
-      });
-    }
   }
 
   Widget _buildFeedButton(int index, String text) {
@@ -109,19 +114,6 @@ class _FeedPageState extends State<FeedPage> {
   Widget build(BuildContext context) { // Removed Future and async
     return GlobalScaffold(
       selectedIndex: 0,
-      floatingActionButton: _isAdmin // Use the state variable
-          ? FloatingActionButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AdminPage()),
-                );
-              },
-              backgroundColor: Colors.red[1],
-              tooltip: 'Admin Console',
-              child: const Icon(Icons.admin_panel_settings, color: Colors.black),
-            )
-          : null,
       body: Stack(
         children: [
           // 1. Background Gradient
@@ -183,6 +175,23 @@ class _FeedPageState extends State<FeedPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     child: GestureDetector(
                       onTap: () async {
+                        // 1. Check Posting Limit
+                        // Fetch latest profile to ensure we have the latest lastPostDate
+                        // (e.g. if user posted in a community recently)
+                        final latestProfile = await DatabaseService().getUserProfile(currentUser.id);
+                        if (latestProfile != null) {
+                          currentUser = latestProfile;
+                        }
+
+                        if (_hasPostedToday(currentUser.lastPostDate)) {
+                          if (mounted) {
+                            _showLimitNotification(); // Changed from SnackBar
+                          }
+                          return;
+                        }
+
+                        if (!context.mounted) return;
+
                         final result = await showGeneralDialog(
                           context: context,
                           barrierDismissible: true,
@@ -217,6 +226,11 @@ class _FeedPageState extends State<FeedPage> {
                           setState(() {
                             _refreshCounter++;
                           });
+                          // Update currentUser again to reflect the new post immediately
+                          final updated = await DatabaseService().getUserProfile(currentUser.id);
+                          if (updated != null) {
+                             currentUser = updated;
+                          }
                         }
                       },
                       child: GlassyContainer(
@@ -397,6 +411,117 @@ class _PaginatedFeedListState extends State<PaginatedFeedList> {
           ),
         );
       }
+    );
+  }
+}
+
+class _TopNotification extends StatefulWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _TopNotification({required this.message, required this.onDismiss});
+
+  @override
+  State<_TopNotification> createState() => _TopNotificationState();
+}
+
+class _TopNotificationState extends State<_TopNotification> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _offsetAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0.0, -2.0), // Start further up
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.elasticOut, // Bouncy effect
+      reverseCurve: Curves.easeInBack,
+    ));
+
+    _controller.forward();
+
+    Future.delayed(const Duration(seconds: 4), () async {
+      if (mounted) {
+        await _controller.reverse();
+        widget.onDismiss();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        child: SlideTransition(
+          position: _offsetAnimation,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 300),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A1A).withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(50), // Pill shape
+                    border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: Colors.redAccent.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.priority_high, color: Colors.white, size: 16),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.message,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

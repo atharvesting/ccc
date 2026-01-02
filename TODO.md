@@ -7,15 +7,6 @@ House of Innovation Hackathon Formalities
 - [ ] List of Google Al Tools Integrated
 - [ ] Solution Description (100 Words)
 
-
-- web name
-- smooth scrolling in the feed
-- admin + their controls
-- full community list
-- community set up
-- post says today, yesterday, or date + day
-- skill rating
-- AI-powered skill matching
 - semester must be a number
 
 - Admin control: One post per day toggle. No more posts if limit has been reached or exceeded before toggle is on afterwards.
@@ -26,7 +17,7 @@ polish
 - Fonts
 
 Tier 1 (Must Have):
-Image upload (Firebase Storage)
+- [x] Image upload (Firebase Storage)
 Relative timestamps (today/yesterday)
 Like/Save posts UI
 Comments system

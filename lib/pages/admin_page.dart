@@ -270,7 +270,17 @@ class _AdminPageState extends State<AdminPage> {
                                     return ListTile(
                                       contentPadding: EdgeInsets.zero,
                                       title: Text(event.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                      subtitle: Text(event.venue, style: const TextStyle(color: Colors.white54)),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(event.venue, style: const TextStyle(color: Colors.white54)),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            "From: ${event.userFullName} (@${event.username})",
+                                            style: const TextStyle(color: Colors.white38, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
                                       trailing: const Icon(Icons.edit, color: Colors.white54, size: 20),
                                       onTap: () => _showEditEventDialog(event),
                                     );
@@ -640,6 +650,9 @@ class _EditEventRequestDialogState extends State<EditEventRequestDialog> {
     try {
       final updatedEvent = Event(
         id: widget.event.id,
+        userId: widget.event.userId, // Preserve userId
+        userFullName: widget.event.userFullName, // Preserve userFullName
+        username: widget.event.username, // Preserve username
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         venue: _venueController.text.trim(),
@@ -690,6 +703,25 @@ class _EditEventRequestDialogState extends State<EditEventRequestDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Added User Info
+              Container(
+                padding: const EdgeInsets.all(8),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(kAppCornerRadius),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person, size: 16, color: Colors.white54),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Submitted by: ${widget.event.userFullName} (@${widget.event.username})",
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
               // Action Buttons at Top
               Row(
                 children: [

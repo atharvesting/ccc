@@ -15,8 +15,10 @@ class _SearchPageState extends State<SearchPage> {
   final _searchController = TextEditingController();
   List<UserProfile> _results = [];
   bool _isLoading = false;
+  String _currentQuery = ""; // To handle race conditions
 
   void _performSearch(String query) async {
+    _currentQuery = query;
     if (query.isEmpty) {
       setState(() => _results = []);
       return;
@@ -25,9 +27,19 @@ class _SearchPageState extends State<SearchPage> {
     setState(() => _isLoading = true);
     try {
       final users = await DatabaseService().searchUsers(query);
+      
+      // Race condition check: If query changed while waiting, discard results
+      if (_currentQuery != query) return;
+      if (!mounted) return;
+
       setState(() => _results = users);
+    } catch (e) {
+      print("Search Error: $e"); // Log error for debugging
     } finally {
-      setState(() => _isLoading = false);
+      // Only stop loading if this is still the active query
+      if (mounted && _currentQuery == query) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -66,10 +78,10 @@ class _SearchPageState extends State<SearchPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: GlassyContainer(
                       padding: 4.0,
-                      color: Colors.white.withValues(alpha: 0.1),
+                      // color: Colors.white.withValues(alpha: 0.1),
                       child: TextField(
                         controller: _searchController,
-                        autofocus: false,
+                        autofocus: true,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(
                           hintText: 'Search by name or username...',

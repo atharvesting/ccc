@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'; // For kIsWeb check
+import 'package:flutter/services.dart'; // Added for SystemChrome
 import 'firebase_options.dart'; 
 import 'pages/feed_page.dart';
 import 'pages/auth_page.dart';
@@ -13,6 +14,19 @@ import 'widgets.dart'; // Import for kAppCornerRadius
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Added: Configure System UI for edge-to-edge display
+  // This allows the app background to extend behind the status bar and navigation bar
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
+  
+  // Added: Enable edge-to-edge mode
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   
   try {
     await Firebase.initializeApp(

@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // Added import
+import 'dart:typed_data'; // Added import
 import '../models.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance; // Added storage instance
 
   // HARDCODED ADMIN UID (Fallback)
   static const String _fallbackAdminUid = "aLYyefw5aCNwhrB5VHzCphBbgJv1"; 
@@ -22,6 +25,20 @@ class DatabaseService {
 
   Future<void> transferAdminRights(String newAdminUid) async {
     await _db.collection('metadata').doc('admin').set({'uid': newAdminUid});
+  }
+
+  // --- Storage ---
+  
+  Future<String> uploadImage(Uint8List fileData, String folderName) async {
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${fileData.length}';
+    final ref = _storage.ref().child('$folderName/$fileName.jpg');
+    
+    // Set content type to image/jpeg for better browser handling
+    final metadata = SettableMetadata(contentType: 'image/jpeg');
+    
+    final uploadTask = ref.putData(fileData, metadata);
+    final snapshot = await uploadTask;
+    return await snapshot.ref.getDownloadURL();
   }
 
   // --- Admin Features ---
@@ -309,22 +326,54 @@ class DatabaseService {
   Future<List<UserProfile>> searchUsers(String query) async {
     if (query.isEmpty) return [];
 
-    // Fetching all users for client-side filtering.
-    // Ideally, use a dedicated search service (Algolia) for production scaling.
-    final snapshot = await _db.collection('users').get();
-    final allUsers = snapshot.docs.map((doc) => UserProfile.fromMap(doc.id, doc.data())).toList();
+    final term = query.toLowerCase();
+    final endTerm = '$term\uf8ff';
 
-    final lowerQuery = query.toLowerCase();
-    return allUsers.where((user) {
-      return user.fullName.toLowerCase().contains(lowerQuery) ||
-             user.username.toLowerCase().contains(lowerQuery);
-    }).toList();
+    try {
+      // Perform parallel queries for username and fullName using the search indices
+      // This is scalable because it only fetches matching documents (limit 10)
+      final results = await Future.wait([
+        _db.collection('users')
+           .where('search_username', isGreaterThanOrEqualTo: term)
+           .where('search_username', isLessThan: endTerm)
+           .limit(10)
+           .get(),
+        _db.collection('users')
+           .where('search_fullName', isGreaterThanOrEqualTo: term)
+           .where('search_fullName', isLessThan: endTerm)
+           .limit(10)
+           .get(),
+      ]);
+
+      final Map<String, UserProfile> uniqueUsers = {};
+      
+      for (var snapshot in results) {
+        for (var doc in snapshot.docs) {
+          uniqueUsers[doc.id] = UserProfile.fromMap(doc.id, doc.data());
+        }
+      }
+
+      return uniqueUsers.values.toList();
+    } catch (e) {
+      print("Search Error: $e");
+      return [];
+    }
   }
 
   // --- Communities ---
 
   Future<void> createCommunity(Community community) async {
-    // Check if code exists
+    // 1. Check Membership Limit (Max 3)
+    // Since creator automatically joins, they must have < 3 communities currently.
+    final userCommunities = await _db.collection('communities')
+        .where('memberIds', arrayContains: community.creatorId)
+        .get();
+    
+    if (userCommunities.docs.length >= 3) {
+      throw Exception("You can only be part of 3 communities at most.");
+    }
+
+    // 2. Check if code exists (Uniqueness)
     final query = await _db.collection('communities').where('code', isEqualTo: community.code).get();
     if (query.docs.isNotEmpty) throw Exception("Community code already taken. Please choose another.");
     
@@ -332,6 +381,16 @@ class DatabaseService {
   }
 
   Future<void> joinCommunity(String userId, String code) async {
+    // 1. Check Membership Limit (Max 3)
+    final userCommunities = await _db.collection('communities')
+        .where('memberIds', arrayContains: userId)
+        .get();
+    
+    if (userCommunities.docs.length >= 3) {
+      throw Exception("You can only be part of 3 communities at most.");
+    }
+
+    // 2. Proceed with Join
     final query = await _db.collection('communities').where('code', isEqualTo: code).limit(1).get();
     if (query.docs.isEmpty) throw Exception("Invalid Community Code");
     

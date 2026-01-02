@@ -39,7 +39,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
     
     _bioController = TextEditingController(text: displayUser.bio);
     _fullNameController = TextEditingController(text: displayUser.fullName);
-    _semesterController = TextEditingController(text: displayUser.currentSemester);
+    _semesterController = TextEditingController(text: displayUser.currentSemester.toString()); // Fixed: Convert int to String
     _skillInputController = TextEditingController();
     _editingSkills = List.from(displayUser.skills);
     _editingOpenToCollaborate = displayUser.openToCollaborate; // Initialize
@@ -74,7 +74,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
       fullName: _fullNameController.text.trim(),
       bio: _bioController.text.trim(),
       skills: _editingSkills, // Skills are saved as "Name:Rating" strings in Firestore
-      currentSemester: _semesterController.text.trim(),
+      currentSemester: int.tryParse(_semesterController.text.trim()) ?? 1, // Fixed: Parse String to int
       openToCollaborate: _editingOpenToCollaborate, // Use edited value
       phoneNumber: displayUser.phoneNumber,
       savedPostIds: displayUser.savedPostIds,
@@ -373,7 +373,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                           // Reset editing state to current values from stream
                                           _editingSkills = List.from(user.skills);
                                           _fullNameController.text = user.fullName;
-                                          _semesterController.text = user.currentSemester;
+                                          _semesterController.text = user.currentSemester.toString(); // Fixed: Convert int to String
                                           _bioController.text = user.bio;
                                           _editingOpenToCollaborate = user.openToCollaborate; // Reset toggle
                                         });

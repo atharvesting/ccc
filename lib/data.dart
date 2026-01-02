@@ -14,6 +14,6 @@ UserProfile currentUser = UserProfile(
   fullName: 'Guest User',
   bio: '', 
   skills: [],
-  currentSemester: '1',
+  currentSemester: 1,
   openToCollaborate: false,
 );
