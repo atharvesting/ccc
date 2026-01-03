@@ -19,7 +19,3 @@
 - Changed and polished the onboarding layout.
 - Added skill rating to onboarding as well as profile page.
 - Applied various performance improvements.
-
-2026-01-02:
-- Implemented Image Upload using Firebase Storage.
-- Added full-screen image viewer for posts.
