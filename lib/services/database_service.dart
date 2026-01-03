@@ -9,22 +9,47 @@ class DatabaseService {
 
   // HARDCODED ADMIN UID (Fallback)
   static const String _fallbackAdminUid = "aLYyefw5aCNwhrB5VHzCphBbgJv1"; 
+  
+  // Cache for admin status to avoid repeated database calls
+  String? _cachedAdminUid;
+  DateTime? _cacheTimestamp;
+  static const Duration _cacheDuration = Duration(minutes: 5);
 
   // Helper to check if a user is admin (Now Async to support transfer)
+  // Cached to avoid repeated database calls
   Future<bool> isAdmin(String uid) async {
+    // Check cache first
+    if (_cachedAdminUid != null && 
+        _cacheTimestamp != null && 
+        DateTime.now().difference(_cacheTimestamp!) < _cacheDuration) {
+      return _cachedAdminUid == uid;
+    }
+    
     try {
       final doc = await _db.collection('metadata').doc('admin').get();
       if (doc.exists && doc.data() != null && doc.data()!.containsKey('uid')) {
-        return doc.data()!['uid'] == uid;
+        _cachedAdminUid = doc.data()!['uid'] as String;
+        _cacheTimestamp = DateTime.now();
+        return _cachedAdminUid == uid;
       }
     } catch (e) {
       print("Error checking admin status: $e");
     }
-    return uid == _fallbackAdminUid;
+    
+    // Fallback to hardcoded admin
+    final isFallbackAdmin = uid == _fallbackAdminUid;
+    if (isFallbackAdmin) {
+      _cachedAdminUid = uid;
+      _cacheTimestamp = DateTime.now();
+    }
+    return isFallbackAdmin;
   }
 
   Future<void> transferAdminRights(String newAdminUid) async {
     await _db.collection('metadata').doc('admin').set({'uid': newAdminUid});
+    // Invalidate cache
+    _cachedAdminUid = newAdminUid;
+    _cacheTimestamp = DateTime.now();
   }
 
   // --- Storage ---
@@ -59,6 +84,182 @@ class DatabaseService {
       batch.delete(doc.reference);
     }
     await batch.commit();
+  }
+
+  // --- Bulk Admin Operations ---
+
+  /// Delete ALL users from the database (DESTRUCTIVE)
+  Future<int> deleteAllUsers() async {
+    final usersQuery = await _db.collection('users').get();
+    WriteBatch? batch = _db.batch();
+    int count = 0;
+    int batchCount = 0;
+    
+    for (var doc in usersQuery.docs) {
+      batch!.delete(doc.reference);
+      batchCount++;
+      count++;
+      
+      // Firestore batch limit is 500 operations
+      if (batchCount >= 500) {
+        await batch.commit();
+        batch = _db.batch();
+        batchCount = 0;
+      }
+    }
+    
+    if (batchCount > 0 && batch != null) {
+      await batch.commit();
+    }
+    
+    return count;
+  }
+
+  /// Delete ALL posts from the database (DESTRUCTIVE)
+  Future<int> deleteAllPosts() async {
+    WriteBatch? batch = _db.batch();
+    int count = 0;
+    int batchCount = 0;
+    
+    // Delete global posts
+    final globalPostsQuery = await _db.collection('posts').get();
+    for (var doc in globalPostsQuery.docs) {
+      batch!.delete(doc.reference);
+      batchCount++;
+      count++;
+      
+      if (batchCount >= 500) {
+        await batch.commit();
+        batch = _db.batch();
+        batchCount = 0;
+      }
+    }
+    
+    // Delete community posts
+    final communitiesQuery = await _db.collection('communities').get();
+    for (var communityDoc in communitiesQuery.docs) {
+      final communityPostsQuery = await communityDoc.reference.collection('posts').get();
+      for (var postDoc in communityPostsQuery.docs) {
+        batch!.delete(postDoc.reference);
+        batchCount++;
+        count++;
+        
+        if (batchCount >= 500) {
+          await batch.commit();
+          batch = _db.batch();
+          batchCount = 0;
+        }
+      }
+    }
+    
+    if (batchCount > 0 && batch != null) {
+      await batch.commit();
+    }
+    
+    return count;
+  }
+
+  /// Delete ALL communities from the database (DESTRUCTIVE)
+  Future<int> deleteAllCommunities() async {
+    final communitiesQuery = await _db.collection('communities').get();
+    WriteBatch? batch = _db.batch();
+    int count = 0;
+    int batchCount = 0;
+    
+    for (var doc in communitiesQuery.docs) {
+      // First delete all posts in the community
+      final postsQuery = await doc.reference.collection('posts').get();
+      for (var postDoc in postsQuery.docs) {
+        batch!.delete(postDoc.reference);
+        batchCount++;
+        count++;
+        
+        if (batchCount >= 500) {
+          await batch.commit();
+          batch = _db.batch();
+          batchCount = 0;
+        }
+      }
+      
+      // Then delete the community itself
+      batch!.delete(doc.reference);
+      batchCount++;
+      count++;
+      
+      if (batchCount >= 500) {
+        await batch.commit();
+        batch = _db.batch();
+        batchCount = 0;
+      }
+    }
+    
+    if (batchCount > 0 && batch != null) {
+      await batch.commit();
+    }
+    
+    return count;
+  }
+
+  /// Delete ALL events from the database (DESTRUCTIVE)
+  Future<int> deleteAllEvents() async {
+    final eventsQuery = await _db.collection('events').get();
+    WriteBatch? batch = _db.batch();
+    int count = 0;
+    int batchCount = 0;
+    
+    for (var doc in eventsQuery.docs) {
+      batch!.delete(doc.reference);
+      batchCount++;
+      count++;
+      
+      if (batchCount >= 500) {
+        await batch.commit();
+        batch = _db.batch();
+        batchCount = 0;
+      }
+    }
+    
+    if (batchCount > 0 && batch != null) {
+      await batch.commit();
+    }
+    
+    return count;
+  }
+
+  /// Get database statistics (useful for admin)
+  Future<Map<String, int>> getDatabaseStats() async {
+    final stats = <String, int>{};
+    
+    try {
+      final usersCount = (await _db.collection('users').count().get()).count ?? 0;
+      final postsCount = (await _db.collection('posts').count().get()).count ?? 0;
+      final communitiesCount = (await _db.collection('communities').count().get()).count ?? 0;
+      final eventsCount = (await _db.collection('events').count().get()).count ?? 0;
+      
+      // Count community posts
+      int communityPostsCount = 0;
+      final communities = await _db.collection('communities').get();
+      for (var communityDoc in communities.docs) {
+        final postsCount = (await communityDoc.reference.collection('posts').count().get()).count ?? 0;
+        communityPostsCount += postsCount;
+      }
+      
+      stats['users'] = usersCount;
+      stats['posts'] = postsCount;
+      stats['communityPosts'] = communityPostsCount;
+      stats['communities'] = communitiesCount;
+      stats['events'] = eventsCount;
+    } catch (e) {
+      print("Error getting database stats: $e");
+    }
+    
+    return stats;
+  }
+
+  /// Clear admin cache (useful for testing)
+  void clearAdminCache() {
+    _cachedAdminUid = null;
+    _cacheTimestamp = null;
   }
 
   Future<void> createAnnouncement(Post post) async {
@@ -167,6 +368,18 @@ class DatabaseService {
   }
 
   // --- Posts ---
+
+  Future<void> updatePost(Post post) async {
+    // Update existing post (for editing within time limit)
+    final postData = post.toMap();
+    
+    // Determine which collection to update
+    if (post.communityId != null && post.communityId!.isNotEmpty) {
+      await _db.collection('communities').doc(post.communityId).collection('posts').doc(post.id).update(postData);
+    } else {
+      await _db.collection('posts').doc(post.id).update(postData);
+    }
+  }
 
   Future<void> createPost(Post post) async {
     final batch = _db.batch();
@@ -314,12 +527,32 @@ class DatabaseService {
 
   Stream<List<Post>> getSavedPostsStream(List<String> savedIds) {
     if (savedIds.isEmpty) return Stream.value([]);
-    // Simple implementation: fetch all and filter.
-    return _db.collection('posts').orderBy('timestamp', descending: true).snapshots().map((snap) {
-      return snap.docs
-          .map((doc) => Post.fromMap(doc.id, doc.data()))
-          .where((p) => savedIds.contains(p.id))
-          .toList();
+    
+    // Optimized: Use Firestore 'in' query (limit 30 items per query)
+    // For more than 30 saved posts, we'd need to batch queries
+    if (savedIds.length > 30) {
+      // Fallback: fetch all and filter (for >30 saved posts)
+      return _db.collection('posts').orderBy('timestamp', descending: true).snapshots().map((snap) {
+        final posts = snap.docs
+            .map((doc) => Post.fromMap(doc.id, doc.data()))
+            .where((p) => savedIds.contains(p.id))
+            .toList();
+        // Sort by timestamp descending
+        posts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        return posts;
+      });
+    }
+    
+    // Optimized: Use 'in' query for up to 30 saved posts
+    return _db
+        .collection('posts')
+        .where(FieldPath.documentId, whereIn: savedIds)
+        .snapshots()
+        .map((snapshot) {
+      final posts = snapshot.docs.map((doc) => Post.fromMap(doc.id, doc.data())).toList();
+      // Sort by timestamp descending (client-side since we can't use orderBy with whereIn)
+      posts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return posts;
     });
   }
 

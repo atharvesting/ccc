@@ -86,15 +86,9 @@ class _SkillMatchingPageState extends State<SkillMatchingPage> {
       body: Stack(
         children: [
           // Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
-                colors: [Color(0xFF121212), Color(0xFF1A0033)], // Purple tint for matching
-                stops: [0.0, 1.0],
-              ),
-            ),
+          AppBackground(
+            gradientColors: AppColors.matchingGradient,
+            child: Container(),
           ),
           
           // Content
@@ -103,14 +97,11 @@ class _SkillMatchingPageState extends State<SkillMatchingPage> {
               constraints: const BoxConstraints(maxWidth: 800),
               child: Column(
                 children: [
-                  const SizedBox(height: kToolbarHeight + 20),
+                  const SizedBox(height: kToolbarHeight + kPageTitleSpacing),
                   
                   // Added Title
-                  const Text(
-                    "Skill Match",
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  const SizedBox(height: 16),
+                  const PageTitle(title: "Skill Match"),
+                  const SizedBox(height: AppSpacing.md),
                   
                   // Toggle Buttons
                   Padding(
@@ -189,16 +180,14 @@ class _SkillMatchingPageState extends State<SkillMatchingPage> {
                   // Results List
                   Expanded(
                     child: _isLoading 
-                      ? const Center(child: CircularProgressIndicator(color: Colors.purpleAccent))
+                      ? const AppLoadingIndicator(color: AppColors.matchingAccent)
                       : _matches.isEmpty
-                        ? Center(
-                            child: Text(
-                              _selectedIndex == 0 
+                        ? EmptyStateWidget(
+                            message: _selectedIndex == 0 
                                 ? "No matches found based on your profile.\nTry adding more skills!" 
                                 : "Select domains to find peers.",
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white54),
-                            ),
+                            icon: _selectedIndex == 0 ? Icons.people_outline : Icons.search_off,
+                            iconColor: AppColors.matchingAccent,
                           )
                         : ListView.builder(
                             padding: const EdgeInsets.all(16),

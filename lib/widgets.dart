@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:ui'; // For ImageFilter
 import 'models.dart';
 import 'data.dart'; // for currentUser
 import 'services/database_service.dart'; // Needed to fetch user profile
@@ -11,9 +12,54 @@ import 'pages/skill_matching_page.dart';
 import 'pages/search_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/admin_page.dart'; // Added import
+import 'pages/create_post_page.dart'; // For CreatePostDialog
 
-// Global Design Constant
+// ============================================
+// UNIFIED DESIGN SYSTEM
+// ============================================
+
+// Global Design Constants
 const double kAppCornerRadius = 5.0;
+const double kDefaultPadding = 16.0;
+const double kDefaultSpacing = 8.0;
+const double kPageTitleSize = 26.0;
+const double kPageTitleSpacing = 20.0;
+
+// Unified Color Palette
+class AppColors {
+  // Primary Theme
+  static const Color primary = Colors.redAccent;
+  static const Color primaryDark = Color(0xFF2C0000);
+  static const Color background = Color(0xFF121212);
+  static const Color surface = Color(0xFF1A1A1A);
+  static const Color surfaceLight = Color(0xFF2C2C2C);
+  
+  // Accent Colors for Different Sections
+  static const Color feedAccent = Colors.redAccent;
+  static const Color communitiesAccent = Colors.blueAccent;
+  static const Color eventsAccent = Colors.redAccent;
+  static const Color matchingAccent = Colors.purpleAccent;
+  static const Color searchAccent = Colors.redAccent;
+  
+  // Text Colors
+  static const Color textPrimary = Colors.white;
+  static const Color textSecondary = Color(0xFFB0B0B0);
+  static const Color textTertiary = Color(0xFF808080);
+  
+  // Background Gradients
+  static const List<Color> defaultGradient = [background, primaryDark];
+  static const List<Color> communitiesGradient = [background, Color(0xFF001F2C)];
+  static const List<Color> matchingGradient = [background, Color(0xFF1A0033)];
+}
+
+// Unified Spacing
+class AppSpacing {
+  static const double xs = 4.0;
+  static const double sm = 8.0;
+  static const double md = 16.0;
+  static const double lg = 24.0;
+  static const double xl = 32.0;
+}
 
 // Shared Shadows for the App Title
 final List<Shadow> kAppTitleShadows = [
@@ -125,21 +171,124 @@ class GlassyContainer extends StatelessWidget {
   }
 }
 
-class PostWidget extends StatelessWidget {
+class PostWidget extends StatefulWidget {
   final Post post;
   final UserProfile? userProfile; // Optimization: Pass this to avoid N+1 streams
   final Color themeColor; // Added for theming
+  final VoidCallback? onPostUpdated; // Callback when post is edited
 
   const PostWidget({
     super.key, 
     required this.post, 
     this.userProfile,
     this.themeColor = Colors.redAccent,
+    this.onPostUpdated,
   });
+
+  @override
+  State<PostWidget> createState() => _PostWidgetState();
+}
+
+class _PostWidgetState extends State<PostWidget> {
+  late bool _isSaved; // Local state for optimistic updates
+  bool _isSaving = false; // Prevent double-taps
+
+  @override
+  void initState() {
+    super.initState();
+    _isSaved = widget.userProfile?.savedPostIds.contains(widget.post.id) ?? false;
+  }
+
+  @override
+  void didUpdateWidget(PostWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update saved state if userProfile changes
+    if (widget.userProfile != null) {
+      _isSaved = widget.userProfile!.savedPostIds.contains(widget.post.id);
+    }
+  }
+
+  bool _canEditPost() {
+    // Can edit if: own post AND within 15 minutes
+    if (widget.post.userId != currentUser.id) return false;
+    final now = DateTime.now();
+    final difference = now.difference(widget.post.timestamp);
+    return difference.inMinutes <= 15;
+  }
+
+  void _editPost() {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return CreatePostDialog(postToEdit: widget.post);
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: 10 * animation.value, 
+            sigmaY: 10 * animation.value
+          ),
+          child: FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: CurvedAnimation(
+                parent: animation, 
+                curve: Curves.easeOutBack
+              ),
+              child: child,
+            ),
+          ),
+        );
+      },
+    ).then((result) {
+      if (result == true && widget.onPostUpdated != null) {
+        widget.onPostUpdated!();
+      }
+    });
+  }
+
+  void _handleSaveToggle() async {
+    if (_isSaving) return; // Prevent double-taps
+    
+    setState(() {
+      _isSaving = true;
+      _isSaved = !_isSaved; // Optimistic update
+    });
+
+    try {
+      await DatabaseService().toggleSavePost(currentUser.id, widget.post.id);
+      // Update currentUser's savedPostIds for consistency
+      if (_isSaved) {
+        if (!currentUser.savedPostIds.contains(widget.post.id)) {
+          currentUser.savedPostIds.add(widget.post.id);
+        }
+      } else {
+        currentUser.savedPostIds.remove(widget.post.id);
+      }
+    } catch (e) {
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          _isSaved = !_isSaved;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: ${e.toString()}"), duration: const Duration(seconds: 2)),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
 
   void _navigateToProfile(BuildContext context) async {
     // Fetch the full user profile based on the ID in the post
-    final userProfile = await DatabaseService().getUserProfile(post.userId);
+    final userProfile = await DatabaseService().getUserProfile(widget.post.userId);
     if (userProfile != null && context.mounted) {
       Navigator.push(
         context,
@@ -151,25 +300,34 @@ class PostWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Optimization: If userProfile is provided (lifted state), use it directly.
-    // Otherwise, fall back to internal StreamBuilder (legacy behavior).
-    if (userProfile != null) {
-      return _buildPostContent(context, userProfile!);
+    // Otherwise, fetch the post author's profile (not currentUser).
+    if (widget.userProfile != null) {
+      return _buildPostContent(context, widget.userProfile!);
     }
 
-    return StreamBuilder<UserProfile>(
-      stream: DatabaseService().getUserProfileStream(currentUser.id),
+    // Fetch the post author's profile, not the current user's profile
+    return FutureBuilder<UserProfile?>(
+      future: DatabaseService().getUserProfile(widget.post.userId),
       builder: (context, snapshot) {
-        final user = snapshot.data ?? currentUser;
+        // Use a default profile if not found, but this shouldn't happen
+        final user = snapshot.data ?? UserProfile(
+          id: widget.post.userId,
+          username: widget.post.username,
+          fullName: widget.post.userFullName,
+          bio: '',
+          skills: [],
+          currentSemester: 1,
+          openToCollaborate: false,
+        );
         return _buildPostContent(context, user);
       }
     );
   }
 
   Widget _buildPostContent(BuildContext context, UserProfile viewerProfile) {
-    final isSaved = viewerProfile.savedPostIds.contains(post.id);
-    final isAnnouncement = post.username == 'admin';
-    
-    final effectiveColor = isAnnouncement ? Colors.amber : themeColor;
+    final isAnnouncement = widget.post.username == 'admin';
+    final effectiveColor = isAnnouncement ? Colors.amber : widget.themeColor;
+    final canEdit = _canEditPost();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
@@ -197,7 +355,7 @@ class PostWidget extends StatelessWidget {
                             const SizedBox(width: 8),
                           ],
                           Text(
-                            post.userFullName,
+                            widget.post.userFullName,
                             style: TextStyle(
                               fontWeight: FontWeight.bold, 
                               color: Colors.white, // Use theme color
@@ -208,11 +366,11 @@ class PostWidget extends StatelessWidget {
                           ),
                           const SizedBox(width: 8,),
                           Text(
-                            '@${post.username}',
+                            '@${widget.post.username}',
                             style: TextStyle(color: effectiveColor, fontSize: 12), // Use theme color
                           ),
                           // Streak Icon (From Post Data)
-                          if (!isAnnouncement && post.streak > 0)
+                          if (!isAnnouncement && widget.post.streak > 0)
                             Padding(
                               padding: const EdgeInsets.only(left: 6.0),
                               child: Row(
@@ -220,7 +378,7 @@ class PostWidget extends StatelessWidget {
                                   const Icon(Icons.local_fire_department, color: Colors.orange, size: 14),
                                   const SizedBox(width: 2),
                                   Text(
-                                    "${post.streak}",
+                                    "${widget.post.streak}",
                                     style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
                                   ),
                                 ],
@@ -234,33 +392,51 @@ class PostWidget extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      _formatDate(post.timestamp),
+                      _formatDate(widget.post.timestamp),
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                     const SizedBox(width: 8),
-                    IconButton(
-                      icon: Icon(
-                        isSaved ? Icons.favorite : Icons.favorite_border,
-                        color: isSaved ? Colors.redAccent : Colors.white54,
-                        size: 20,
+                    // Edit button (only for own posts within 15 min)
+                    if (canEdit) ...[
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 18),
+                        color: Colors.blueAccent,
+                        onPressed: _editPost,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: "Edit post",
                       ),
-                      onPressed: () {
-                        DatabaseService().toggleSavePost(currentUser.id, post.id);
-                      },
+                      const SizedBox(width: 4),
+                    ],
+                    // Save button with optimistic update
+                    IconButton(
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                            )
+                          : Icon(
+                              _isSaved ? Icons.favorite : Icons.favorite_border,
+                              color: _isSaved ? Colors.redAccent : Colors.white54,
+                              size: 20,
+                            ),
+                      onPressed: _isSaving ? null : _handleSaveToggle,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
+                      tooltip: _isSaved ? "Unsave post" : "Save post",
                     ),
                   ],
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(post.content),
-            if (post.tags.isNotEmpty) ...[
+            Text(widget.post.content),
+            if (widget.post.tags.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(
                 spacing: 4,
-                children: post.tags.map((t) {
+                children: widget.post.tags.map((t) {
                   final color = getTagColor(t);
                   return Chip(
                     label: Text(t, style: TextStyle(fontSize: 10, color: color)),
@@ -272,13 +448,13 @@ class PostWidget extends StatelessWidget {
                 }).toList(),
               )
             ],
-            if (post.imageUrls.isNotEmpty) ...[
+            if (widget.post.imageUrls.isNotEmpty) ...[
               const SizedBox(height: 12),
               SizedBox(
                 height: 200,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  itemCount: post.imageUrls.length,
+                  itemCount: widget.post.imageUrls.length,
                   itemBuilder: (context, index) {
                     return Padding(
                       padding: const EdgeInsets.only(right: 8.0),
@@ -295,7 +471,7 @@ class PostWidget extends StatelessWidget {
                                   InteractiveViewer(
                                     minScale: 0.5,
                                     maxScale: 4.0,
-                                    child: Image.network(post.imageUrls[index], fit: BoxFit.contain),
+                                    child: Image.network(widget.post.imageUrls[index], fit: BoxFit.contain),
                                   ),
                                   Padding(
                                     padding: const EdgeInsets.all(16.0),
@@ -312,7 +488,7 @@ class PostWidget extends StatelessWidget {
                         },
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
-                          child: Image.network(post.imageUrls[index]),
+                          child: Image.network(widget.post.imageUrls[index]),
                         ),
                       ),
                     );
@@ -370,8 +546,26 @@ class GlobalScaffold extends StatelessWidget {
       context,
       PageRouteBuilder(
         pageBuilder: (context, animation1, animation2) => page,
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
+        transitionDuration: const Duration(milliseconds: 200),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
+            ),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.02, 0.0),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeInOut,
+              )),
+              child: child,
+            ),
+          );
+        },
       ),
     );
   }
@@ -386,9 +580,9 @@ class GlobalScaffold extends StatelessWidget {
         title: Container(
           margin: const EdgeInsets.only(top: 10), // Push down from status bar
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.8),
+            color: Colors.black.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(50),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
+            // border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.5),
@@ -506,5 +700,194 @@ class GlobalScaffold extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ============================================
+// REUSABLE UI COMPONENTS
+// ============================================
+
+/// Unified Empty State Widget
+class EmptyStateWidget extends StatelessWidget {
+  final String message;
+  final IconData? icon;
+  final Color? iconColor;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const EmptyStateWidget({
+    super.key,
+    required this.message,
+    this.icon,
+    this.iconColor,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 64,
+                color: iconColor ?? AppColors.textTertiary,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+            ],
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 16,
+              ),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: AppSpacing.lg),
+              ElevatedButton(
+                onPressed: onAction,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.md,
+                  ),
+                ),
+                child: Text(actionLabel!),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Unified Page Title Widget
+class PageTitle extends StatelessWidget {
+  final String title;
+  final Color? color;
+
+  const PageTitle({
+    super.key,
+    required this.title,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: kPageTitleSize,
+        fontWeight: FontWeight.bold,
+        color: color ?? AppColors.textPrimary,
+      ),
+    );
+  }
+}
+
+/// Unified Loading Indicator
+class AppLoadingIndicator extends StatelessWidget {
+  final Color? color;
+  final double? size;
+
+  const AppLoadingIndicator({
+    super.key,
+    this.color,
+    this.size,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SizedBox(
+        width: size ?? 40,
+        height: size ?? 40,
+        child: CircularProgressIndicator(
+          color: color ?? AppColors.primary,
+          strokeWidth: 3,
+        ),
+      ),
+    );
+  }
+}
+
+/// Unified Background Gradient Container
+class AppBackground extends StatelessWidget {
+  final List<Color>? gradientColors;
+  final Widget child;
+
+  const AppBackground({
+    super.key,
+    this.gradientColors,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.center,
+          radius: 1.2,
+          colors: gradientColors ?? AppColors.defaultGradient,
+          stops: const [0.0, 1.0],
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// Unified Action Button
+class AppActionButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onPressed;
+  final IconData? icon;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final bool isExpanded;
+
+  const AppActionButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.isExpanded = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final button = ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: icon != null ? Icon(icon, size: 20) : const SizedBox.shrink(),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: backgroundColor ?? AppColors.primary,
+        foregroundColor: foregroundColor ?? Colors.white,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(kAppCornerRadius),
+        ),
+      ),
+    );
+
+    if (isExpanded) {
+      return SizedBox(width: double.infinity, child: button);
+    }
+    return button;
   }
 }

@@ -58,25 +58,16 @@ class _EventsPageState extends State<EventsPage> {
       body: Stack(
         children: [
           // Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
-                colors: [Color(0xFF121212), Color(0xFF2C0000)],
-                stops: [0.0, 1.0],
-              ),
-            ),
+          AppBackground(
+            gradientColors: AppColors.defaultGradient,
+            child: Container(),
           ),
           // Content
           Column(
             children: [
-              const SizedBox(height: kToolbarHeight + 20),
-              const Text(
-                "Event Board",
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: kToolbarHeight + kPageTitleSpacing),
+              const PageTitle(title: "Event Board"),
+              const SizedBox(height: AppSpacing.md),
               Expanded(
                 child: StreamBuilder<List<Event>>(
                   stream: DatabaseService().getEventsStream(),
@@ -189,7 +180,11 @@ class _EventsPageState extends State<EventsPage> {
           ),
         Expanded(
           child: events.isEmpty 
-            ? Center(child: Text("No $title events", style: const TextStyle(color: Colors.white38)))
+            ? EmptyStateWidget(
+                message: "No $title events",
+                icon: Icons.event_busy,
+                iconColor: AppColors.textTertiary,
+              )
             : ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 itemCount: events.length,

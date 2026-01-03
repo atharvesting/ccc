@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models.dart';
 import '../services/database_service.dart';
@@ -16,6 +17,31 @@ class _SearchPageState extends State<SearchPage> {
   List<UserProfile> _results = [];
   bool _isLoading = false;
   String _currentQuery = ""; // To handle race conditions
+  Timer? _debounceTimer; // Added for debouncing
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    // Cancel previous timer
+    _debounceTimer?.cancel();
+    
+    // Create new timer for debouncing (500ms delay)
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _performSearch(_searchController.text);
+    });
+  }
 
   void _performSearch(String query) async {
     _currentQuery = query;
@@ -50,15 +76,9 @@ class _SearchPageState extends State<SearchPage> {
       body: Stack(
         children: [
           // Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
-                colors: [Color(0xFF121212), Color(0xFF2C0000)],
-                stops: [0.0, 1.0],
-              ),
-            ),
+          AppBackground(
+            gradientColors: AppColors.defaultGradient,
+            child: Container(),
           ),
           // Content
           Center(
@@ -66,12 +86,9 @@ class _SearchPageState extends State<SearchPage> {
               constraints: const BoxConstraints(maxWidth: 800),
               child: Column(
                 children: [
-                  const SizedBox(height: kToolbarHeight + 20),
-                  const Text(
-                    "Search Users",
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: kToolbarHeight + kPageTitleSpacing),
+                  const PageTitle(title: "Search Users"),
+                  const SizedBox(height: AppSpacing.md),
                   
                   // Search Bar
                   Padding(
@@ -101,15 +118,16 @@ class _SearchPageState extends State<SearchPage> {
                   // Results
                   Expanded(
                     child: _isLoading
-                        ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
+                        ? const AppLoadingIndicator()
                         : _results.isEmpty
-                            ? Center(
-                                child: Text(
-                                  _searchController.text.isEmpty 
+                            ? EmptyStateWidget(
+                                message: _searchController.text.isEmpty 
                                     ? "Start typing to find peers..." 
                                     : "No users found.",
-                                  style: const TextStyle(color: Colors.white54),
-                                ),
+                                icon: _searchController.text.isEmpty 
+                                    ? Icons.search 
+                                    : Icons.person_off,
+                                iconColor: AppColors.textTertiary,
                               )
                             : ListView.builder(
                                 padding: const EdgeInsets.all(16),

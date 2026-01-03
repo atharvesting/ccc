@@ -28,15 +28,9 @@ class _CommunitiesPageState extends State<CommunitiesPage> {
       body: Stack(
         children: [
           // Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
-                colors: [Color(0xFF121212), Color(0xFF001F2C)], // Blue-ish tint for communities
-                stops: [0.0, 1.0],
-              ),
-            ),
+          AppBackground(
+            gradientColors: AppColors.communitiesGradient,
+            child: Container(),
           ),
           // Content
           Center(
@@ -44,14 +38,11 @@ class _CommunitiesPageState extends State<CommunitiesPage> {
               constraints: const BoxConstraints(maxWidth: 800),
               child: Column(
                 children: [
-                  const SizedBox(height: kToolbarHeight + 20),
+                  const SizedBox(height: kToolbarHeight + kPageTitleSpacing),
                   
                   // Added Title
-                  const Text(
-                    "Communities",
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
-                  ),
-                  const SizedBox(height: 16),
+                  const PageTitle(title: "Communities"),
+                  const SizedBox(height: AppSpacing.md),
 
                   // Actions
                   Padding(
@@ -115,12 +106,10 @@ class _CommunitiesPageState extends State<CommunitiesPage> {
                         final communities = snapshot.data ?? [];
                         
                         if (communities.isEmpty) {
-                          return const Center(
-                            child: Text(
-                              "You haven't joined any communities yet.\nCreate one or join using a code!",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.white54),
-                            ),
+                          return const EmptyStateWidget(
+                            message: "You haven't joined any communities yet.\nCreate one or join using a code!",
+                            icon: Icons.groups_outlined,
+                            iconColor: AppColors.communitiesAccent,
                           );
                         }
 

@@ -26,6 +26,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
   bool _isEditing = false;
   bool _isCurrentUser = false;
   List<String> _editingSkills = [];
+  Map<String, int> _editingSkillRatings = {}; // Store ratings separately
   int _selectedTabIndex = 0; // Added state for tab selection
   int _newSkillRating = 3; // Default rating for new skills
   bool _editingOpenToCollaborate = false; // New state for editing collaboration status
@@ -41,7 +42,24 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
     _fullNameController = TextEditingController(text: displayUser.fullName);
     _semesterController = TextEditingController(text: displayUser.currentSemester.toString()); // Fixed: Convert int to String
     _skillInputController = TextEditingController();
+    
+    // Initialize skills and ratings properly
     _editingSkills = List.from(displayUser.skills);
+    _editingSkillRatings = Map.from(displayUser.skillRatings);
+    
+    // Handle backward compatibility: if skills contain "Skill:Rating" format, parse them
+    if (_editingSkills.isNotEmpty && _editingSkillRatings.isEmpty) {
+      final parsedSkills = <String>[];
+      final parsedRatings = <String, int>{};
+      for (var skill in _editingSkills) {
+        final (name, rating) = _parseSkill(skill);
+        parsedSkills.add(name);
+        parsedRatings[name] = rating;
+      }
+      _editingSkills = parsedSkills;
+      _editingSkillRatings = parsedRatings;
+    }
+    
     _editingOpenToCollaborate = displayUser.openToCollaborate; // Initialize
   }
 
@@ -73,13 +91,17 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
       username: displayUser.username,
       fullName: _fullNameController.text.trim(),
       bio: _bioController.text.trim(),
-      skills: _editingSkills, // Skills are saved as "Name:Rating" strings in Firestore
+      skills: _editingSkills, // Store skills as separate list
+      skillRatings: _editingSkillRatings, // Store ratings as separate map
       currentSemester: int.tryParse(_semesterController.text.trim()) ?? 1, // Fixed: Parse String to int
       openToCollaborate: _editingOpenToCollaborate, // Use edited value
       phoneNumber: displayUser.phoneNumber,
       savedPostIds: displayUser.savedPostIds,
       followers: displayUser.followers,
       following: displayUser.following,
+      currentStreak: displayUser.currentStreak,
+      highestStreak: displayUser.highestStreak,
+      lastPostDate: displayUser.lastPostDate,
     );
 
     await DatabaseService().updateUserProfile(updatedProfile);
@@ -96,11 +118,12 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
   void _addSkill() {
     final skill = _skillInputController.text.trim();
     if (skill.isNotEmpty) {
-      // Check duplicates based on name only
-      final exists = _editingSkills.any((s) => _parseSkill(s).$1.toLowerCase() == skill.toLowerCase());
+      // Check duplicates based on name only (case-insensitive)
+      final exists = _editingSkills.any((s) => s.toLowerCase() == skill.toLowerCase());
       if (!exists) {
         setState(() {
-          _editingSkills.add("$skill:$_newSkillRating");
+          _editingSkills.add(skill);
+          _editingSkillRatings[skill] = _newSkillRating;
           _skillInputController.clear();
           _newSkillRating = 3; // Reset to default
         });
@@ -111,6 +134,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
   void _removeSkill(String skill) {
     setState(() {
       _editingSkills.remove(skill);
+      _editingSkillRatings.remove(skill);
     });
   }
 
@@ -210,16 +234,21 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
     );
   }
 
-  Widget _buildSkillGraph(List<String> rawSkills) {
-    final parsedSkills = rawSkills.map((s) => _parseSkill(s)).toList();
+  Widget _buildSkillGraph(List<String> skills, Map<String, int> skillRatings) {
+    // Create list of (skillName, rating) tuples
+    final skillList = skills.map((skillName) {
+      final rating = skillRatings[skillName] ?? 1;
+      return (skillName, rating);
+    }).toList();
+    
     // Sort descending by rating
-    parsedSkills.sort((a, b) => b.$2.compareTo(a.$2));
+    skillList.sort((a, b) => b.$2.compareTo(a.$2));
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0), // Match PostWidget horizontal margin
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: parsedSkills.map((item) {
+        children: skillList.map((item) {
           final name = item.$1;
           final rating = item.$2;
           final color = getTagColor(name);
@@ -372,6 +401,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                           _isEditing = true;
                                           // Reset editing state to current values from stream
                                           _editingSkills = List.from(user.skills);
+                                          _editingSkillRatings = Map.from(user.skillRatings);
                                           _fullNameController.text = user.fullName;
                                           _semesterController.text = user.currentSemester.toString(); // Fixed: Convert int to String
                                           _bioController.text = user.bio;
@@ -635,16 +665,16 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                         Wrap(
                                           spacing: 6,
                                           runSpacing: 6,
-                                          children: _editingSkills.map((rawSkill) {
-                                            final (name, rating) = _parseSkill(rawSkill);
-                                            final color = getTagColor(name);
+                                          children: _editingSkills.map((skillName) {
+                                            final rating = _editingSkillRatings[skillName] ?? 1;
+                                            final color = getTagColor(skillName);
                                             return Chip(
-                                              label: Text("$name ($rating/5)", style: TextStyle(fontSize: 14, color: color)),
+                                              label: Text("$skillName ($rating/5)", style: TextStyle(fontSize: 14, color: color)),
                                               padding: EdgeInsets.zero,
                                               visualDensity: VisualDensity.compact,
                                               backgroundColor: color.withValues(alpha: 0.15),
                                               side: BorderSide(color: color.withValues(alpha: 0.3)),
-                                              onDeleted: () => _removeSkill(rawSkill),
+                                              onDeleted: () => _removeSkill(skillName),
                                               deleteIcon: Icon(Icons.close, size: 12, color: color),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
                                             );
@@ -661,7 +691,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
 
                           // Skill Graph (View Mode Only)
                           if (!_isEditing && user.skills.isNotEmpty) ...[
-                             _buildSkillGraph(user.skills),
+                             _buildSkillGraph(user.skills, user.skillRatings),
                              const SizedBox(height: 24),
                           ],
                           

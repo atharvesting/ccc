@@ -117,18 +117,9 @@ class _FeedPageState extends State<FeedPage> {
       body: Stack(
         children: [
           // 1. Background Gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
-                colors: [
-                  Color(0xFF121212), // Middle: Darker
-                  Color(0xFF2C0000), // Edges: Lighter/Redder
-                ],
-                stops: [0.0, 1.0],
-              ),
-            ),
+          AppBackground(
+            gradientColors: AppColors.defaultGradient,
+            child: Container(),
           ),
           // 2. Decorative Circles - Optimized
           Positioned(
@@ -404,6 +395,10 @@ class _PaginatedFeedListState extends State<PaginatedFeedList> {
                     post: _posts[index],
                     userProfile: userProfile, // Pass the stream data down
                     themeColor: widget.themeColor, // Pass theme color
+                    onPostUpdated: () {
+                      // Refresh the feed when a post is edited
+                      _refresh();
+                    },
                   ),
                 );
               },

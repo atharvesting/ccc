@@ -64,18 +64,45 @@ class _AdminPageState extends State<AdminPage> {
     onResults(results);
   }
 
-  Future<bool?> _showConfirmation(String title, String content, String confirmText, Color confirmColor) {
+  Future<bool?> _showConfirmation(
+    String title,
+    String content,
+    String confirmText,
+    Color confirmColor, {
+    bool requiresTextInput = false,
+    String? confirmationText,
+  }) {
+    if (!requiresTextInput) {
+      return showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+          title: Text(title, style: const TextStyle(color: Colors.white)),
+          content: Text(content, style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.pop(context, false),
+            ),
+            TextButton(
+              child: Text(confirmText, style: TextStyle(color: confirmColor, fontWeight: FontWeight.bold)),
+              onPressed: () => Navigator.pop(context, true),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // For dangerous operations, require text input
     return showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        content: Text(content, style: const TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(child: const Text("Cancel", style: TextStyle(color: Colors.grey)), onPressed: () => Navigator.pop(context, false)),
-          TextButton(child: Text(confirmText, style: TextStyle(color: confirmColor, fontWeight: FontWeight.bold)), onPressed: () => Navigator.pop(context, true)),
-        ],
+      builder: (context) => _DangerConfirmationDialog(
+        title: title,
+        content: content,
+        confirmText: confirmText,
+        confirmColor: confirmColor,
+        confirmationText: confirmationText ?? "DELETE ALL",
       ),
     );
   }
@@ -152,6 +179,127 @@ class _AdminPageState extends State<AdminPage> {
     }
   }
 
+  Future<void> _deleteAllUsers() async {
+    final confirm = await _showConfirmation(
+      "⚠️ DELETE ALL USERS? ⚠️",
+      "This will PERMANENTLY DELETE ALL users and their data. This action CANNOT be undone!\n\nType 'DELETE ALL' to confirm.",
+      "DELETE ALL",
+      Colors.red,
+      requiresTextInput: true,
+      confirmationText: "DELETE ALL",
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final count = await DatabaseService().deleteAllUsers();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Deleted $count users"), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteAllPosts() async {
+    final confirm = await _showConfirmation(
+      "⚠️ DELETE ALL POSTS? ⚠️",
+      "This will PERMANENTLY DELETE ALL posts (global and community posts). This action CANNOT be undone!\n\nType 'DELETE ALL' to confirm.",
+      "DELETE ALL",
+      Colors.red,
+      requiresTextInput: true,
+      confirmationText: "DELETE ALL",
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final count = await DatabaseService().deleteAllPosts();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Deleted $count posts"), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteAllCommunities() async {
+    final confirm = await _showConfirmation(
+      "⚠️ DELETE ALL COMMUNITIES? ⚠️",
+      "This will PERMANENTLY DELETE ALL communities and their posts. This action CANNOT be undone!\n\nType 'DELETE ALL' to confirm.",
+      "DELETE ALL",
+      Colors.red,
+      requiresTextInput: true,
+      confirmationText: "DELETE ALL",
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final count = await DatabaseService().deleteAllCommunities();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Deleted $count communities"), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteAllEvents() async {
+    final confirm = await _showConfirmation(
+      "⚠️ DELETE ALL EVENTS? ⚠️",
+      "This will PERMANENTLY DELETE ALL events. This action CANNOT be undone!\n\nType 'DELETE ALL' to confirm.",
+      "DELETE ALL",
+      Colors.red,
+      requiresTextInput: true,
+      confirmationText: "DELETE ALL",
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final count = await DatabaseService().deleteAllEvents();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Deleted $count events"), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Stream<Map<String, int>> _getStatsStream() {
+    // Only fetch once when the page is opened
+    return Stream.value(null).asyncMap((_) => DatabaseService().getDatabaseStats());
+  }
+
   void _showEditEventDialog(Event event) {
     showDialog(
       context: context,
@@ -175,18 +323,9 @@ class _AdminPageState extends State<AdminPage> {
       body: Stack(
         children: [
           // 1. Background Gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
-                colors: [
-                  Color(0xFF121212), // Middle: Darker
-                  Color(0xFF2C0000), // Edges: Lighter/Redder
-                ],
-                stops: [0.0, 1.0],
-              ),
-            ),
+          AppBackground(
+            gradientColors: AppColors.defaultGradient,
+            child: Container(),
           ),
           // 2. Decorative Circles
           Positioned(
@@ -222,7 +361,7 @@ class _AdminPageState extends State<AdminPage> {
           
           // 3. Content
           if (_isLoading)
-            const Center(child: CircularProgressIndicator(color: Colors.redAccent))
+            const AppLoadingIndicator()
           else
             SingleChildScrollView(
               child: Center(
@@ -374,6 +513,82 @@ class _AdminPageState extends State<AdminPage> {
                             _buildTextField(_postIdController, "Target Post ID"),
                             const SizedBox(height: 16),
                             _buildButton("Delete Post", Icons.delete, Colors.orange.withValues(alpha: 0.2), Colors.orangeAccent, _deletePost),
+                          ]
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Section 5: Database Statistics
+                        _buildSection(
+                          title: "Database Statistics",
+                          icon: Icons.analytics,
+                          color: Colors.cyan,
+                          children: [
+                            StreamBuilder<Map<String, int>>(
+                              stream: _getStatsStream(),
+                              builder: (context, snapshot) {
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return const Center(child: CircularProgressIndicator(color: Colors.cyan));
+                                }
+                                final stats = snapshot.data ?? {};
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildStatRow("Users", stats['users'] ?? 0, Icons.people),
+                                    _buildStatRow("Global Posts", stats['posts'] ?? 0, Icons.article),
+                                    _buildStatRow("Community Posts", stats['communityPosts'] ?? 0, Icons.forum),
+                                    _buildStatRow("Communities", stats['communities'] ?? 0, Icons.groups),
+                                    _buildStatRow("Events", stats['events'] ?? 0, Icons.event),
+                                  ],
+                                );
+                              },
+                            ),
+                          ]
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Section 6: Bulk Delete Operations (DANGER ZONE)
+                        _buildSection(
+                          title: "⚠️ DANGER ZONE ⚠️",
+                          icon: Icons.warning,
+                          color: Colors.red,
+                          children: [
+                            const Text(
+                              "These operations are IRREVERSIBLE. Use with extreme caution!",
+                              style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDangerButton("Delete ALL Users", Icons.delete_forever, _deleteAllUsers),
+                            const SizedBox(height: 8),
+                            _buildDangerButton("Delete ALL Posts", Icons.delete_sweep, _deleteAllPosts),
+                            const SizedBox(height: 8),
+                            _buildDangerButton("Delete ALL Communities", Icons.group_remove, _deleteAllCommunities),
+                            const SizedBox(height: 8),
+                            _buildDangerButton("Delete ALL Events", Icons.event_busy, _deleteAllEvents),
+                          ]
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Section 7: Utility Operations
+                        _buildSection(
+                          title: "Utilities",
+                          icon: Icons.settings,
+                          color: Colors.grey,
+                          children: [
+                            _buildButton(
+                              "Clear Admin Cache",
+                              Icons.refresh,
+                              Colors.grey.withValues(alpha: 0.2),
+                              Colors.grey,
+                              () {
+                                DatabaseService().clearAdminCache();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text("Admin cache cleared"))
+                                );
+                              },
+                            ),
                           ]
                         ),
                         
@@ -542,6 +757,140 @@ class _AdminPageState extends State<AdminPage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
         ),
       ),
+    );
+  }
+
+  Widget _buildDangerButton(String text, IconData icon, VoidCallback onPressed) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(text),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red.withValues(alpha: 0.2),
+          foregroundColor: Colors.redAccent,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(kAppCornerRadius),
+            side: const BorderSide(color: Colors.redAccent, width: 2),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String label, int value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.cyan, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label, style: const TextStyle(color: Colors.white70)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.cyan.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(kAppCornerRadius),
+              border: Border.all(color: Colors.cyan.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              value.toString(),
+              style: const TextStyle(
+                color: Colors.cyan,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DangerConfirmationDialog extends StatefulWidget {
+  final String title;
+  final String content;
+  final String confirmText;
+  final Color confirmColor;
+  final String confirmationText;
+
+  const _DangerConfirmationDialog({
+    required this.title,
+    required this.content,
+    required this.confirmText,
+    required this.confirmColor,
+    required this.confirmationText,
+  });
+
+  @override
+  State<_DangerConfirmationDialog> createState() => _DangerConfirmationDialogState();
+}
+
+class _DangerConfirmationDialogState extends State<_DangerConfirmationDialog> {
+  final _textController = TextEditingController();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isConfirmed = _textController.text == widget.confirmationText;
+    
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1A1A1A),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
+      title: Text(widget.title, style: TextStyle(color: widget.confirmColor, fontWeight: FontWeight.bold)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.content, style: const TextStyle(color: Colors.white70)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _textController,
+            style: const TextStyle(color: Colors.white),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: "Type '${widget.confirmationText}' to confirm",
+              labelStyle: const TextStyle(color: Colors.grey),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(kAppCornerRadius),
+                borderSide: const BorderSide(color: Colors.red),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(kAppCornerRadius),
+                borderSide: const BorderSide(color: Colors.red),
+              ),
+              filled: true,
+              fillColor: Colors.black.withValues(alpha: 0.3),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          onPressed: () => Navigator.pop(context, false),
+        ),
+        TextButton(
+          child: Text(
+            widget.confirmText,
+            style: TextStyle(
+              color: isConfirmed ? widget.confirmColor : Colors.grey,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          onPressed: isConfirmed ? () => Navigator.pop(context, true) : null,
+        ),
+      ],
     );
   }
 }

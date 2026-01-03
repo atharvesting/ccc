@@ -37,9 +37,6 @@ void main() async {
     // Catch initialization errors (like missing web configuration)
     runApp(ErrorApp(error: e.toString()));
   }
-
-  const isWasm = bool.fromEnvironment('dart.tool.dart2wasm');
-  print('*** WASM CHECK: $isWasm ***');
 }
 
 class ErrorApp extends StatelessWidget {

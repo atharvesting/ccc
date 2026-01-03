@@ -82,12 +82,23 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        // Parse skills and ratings from "Skill:Rating" format
+        final List<String> skills = [];
+        final Map<String, int> skillRatings = {};
+        
+        for (var rawSkill in _selectedSkills) {
+          final (skillName, rating) = _parseSkill(rawSkill);
+          skills.add(skillName);
+          skillRatings[skillName] = rating;
+        }
+        
         final newProfile = UserProfile(
           id: user.uid,
           username: username,
           fullName: _fullNameController.text.trim(),
           bio: _bioController.text.trim(),
-          skills: _selectedSkills,
+          skills: skills,
+          skillRatings: skillRatings,
           currentSemester: int.tryParse(_semesterController.text.trim()) ?? 1, // Parse String to int
           openToCollaborate: _openToCollaborate,
           phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
