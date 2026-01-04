@@ -165,7 +165,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kAppCornerRadius)),
           title: const Text("Edit Bio", style: TextStyle(color: Colors.white)),
           content: SizedBox(
-            width: double.maxFinite,
+            width: 800,
             child: TextField(
               controller: _bioController,
               maxLength: 250,
@@ -542,7 +542,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                               onTap: () => setState(() => _editingOpenToCollaborate = !_editingOpenToCollaborate),
                                               borderRadius: BorderRadius.circular(kAppCornerRadius),
                                               child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                                                 decoration: BoxDecoration(
                                                   color: _editingOpenToCollaborate ? Colors.green.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.2),
                                                   borderRadius: BorderRadius.circular(kAppCornerRadius),

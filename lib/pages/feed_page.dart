@@ -45,17 +45,6 @@ class _FeedPageState extends State<FeedPage> {
     return date.year == now.year && date.month == now.month && date.day == now.day;
   }
 
-  void _showLimitNotification() {
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (context) => _TopNotification(
-        message: "Daily limit reached! You can post again tomorrow.",
-        onDismiss: () => entry.remove(),
-      ),
-    );
-    Overlay.of(context).insert(entry);
-  }
-
   @override
   void initState() {
     super.initState();
@@ -176,7 +165,7 @@ class _FeedPageState extends State<FeedPage> {
 
                         if (_hasPostedToday(currentUser.lastPostDate)) {
                           if (mounted) {
-                            _showLimitNotification(); // Changed from SnackBar
+                            showTopNotification(context, "Daily limit reached! You can post again tomorrow.", isError: true);
                           }
                           return;
                         }
@@ -406,117 +395,6 @@ class _PaginatedFeedListState extends State<PaginatedFeedList> {
           ),
         );
       }
-    );
-  }
-}
-
-class _TopNotification extends StatefulWidget {
-  final String message;
-  final VoidCallback onDismiss;
-
-  const _TopNotification({required this.message, required this.onDismiss});
-
-  @override
-  State<_TopNotification> createState() => _TopNotificationState();
-}
-
-class _TopNotificationState extends State<_TopNotification> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Offset> _offsetAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-    _offsetAnimation = Tween<Offset>(
-      begin: const Offset(0.0, -2.0), // Start further up
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.elasticOut, // Bouncy effect
-      reverseCurve: Curves.easeInBack,
-    ));
-
-    _controller.forward();
-
-    Future.delayed(const Duration(seconds: 4), () async {
-      if (mounted) {
-        await _controller.reverse();
-        widget.onDismiss();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: SafeArea(
-        child: SlideTransition(
-          position: _offsetAnimation,
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 300),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A).withValues(alpha: 0.7),
-                    borderRadius: BorderRadius.circular(50), // Pill shape
-                    border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                      BoxShadow(
-                        color: Colors.redAccent.withValues(alpha: 0.1),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      )
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: const BoxDecoration(
-                          color: Colors.redAccent,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.priority_high, color: Colors.white, size: 16),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          widget.message,
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

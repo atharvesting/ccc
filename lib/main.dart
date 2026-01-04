@@ -11,6 +11,7 @@ import 'services/database_service.dart';
 import 'models.dart';
 import 'data.dart';
 import 'widgets.dart'; // Import for kAppCornerRadius
+import 'package:supabase_flutter/supabase_flutter.dart' hide User; // Fixed: Hide User to avoid conflict with Firebase User
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +33,12 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    await Supabase.initialize(
+      url: 'https://ratpedyeeximpwbovjtr.supabase.co',
+      anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhdHBlZHllZXhpbXB3Ym92anRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1MTUzNDAsImV4cCI6MjA4MzA5MTM0MH0.lOGe6ZbVrjtTc79jonTQUzpgPVcLRMYE-vssdibfhNQ',
+    );
+
     runApp(const CccApp());
   } catch (e) {
     // Catch initialization errors (like missing web configuration)

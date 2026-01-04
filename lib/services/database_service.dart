@@ -1,11 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // Added import
-import 'dart:typed_data'; // Added import
+import 'package:supabase_flutter/supabase_flutter.dart'; // Changed import
+import 'dart:typed_data';
 import '../models.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance; // Added storage instance
+  final SupabaseClient _supabase = Supabase.instance.client; // Use Supabase client
 
   // HARDCODED ADMIN UID (Fallback)
   static const String _fallbackAdminUid = "aLYyefw5aCNwhrB5VHzCphBbgJv1"; 
@@ -55,15 +55,19 @@ class DatabaseService {
   // --- Storage ---
   
   Future<String> uploadImage(Uint8List fileData, String folderName) async {
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${fileData.length}';
-    final ref = _storage.ref().child('$folderName/$fileName.jpg');
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${fileData.length}.jpg';
+    final path = '$folderName/$fileName';
     
-    // Set content type to image/jpeg for better browser handling
-    final metadata = SettableMetadata(contentType: 'image/jpeg');
-    
-    final uploadTask = ref.putData(fileData, metadata);
-    final snapshot = await uploadTask;
-    return await snapshot.ref.getDownloadURL();
+    // Upload to Supabase Storage (Bucket: 'ccc-image-bucket')
+    // Ensure you have created a public bucket named 'ccc-image-bucket' in your Supabase dashboard
+    await _supabase.storage.from('ccc-image-bucket').uploadBinary(
+      path,
+      fileData,
+      fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
+    );
+
+    // Get Public URL
+    return _supabase.storage.from('ccc-image-bucket').getPublicUrl(path);
   }
 
   // --- Admin Features ---

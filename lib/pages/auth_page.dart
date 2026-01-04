@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // Added for platform check
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider; // Import for GoogleAuthProvider
 import 'dart:ui';
 import '../widgets.dart'; // Import for kAppCornerRadius
 
@@ -87,7 +89,7 @@ class AuthPage extends StatelessWidget {
                               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
-                                    letterSpacing: 1.0,
+                                    letterSpacing: 1.1,
                                   ),
                             ),
                             const SizedBox(height: 4),
@@ -108,7 +110,30 @@ class AuthPage extends StatelessWidget {
                 Expanded(
                   child: Theme(
                     data: Theme.of(context).copyWith(
-                      scaffoldBackgroundColor: Colors.transparent, // Make SignInScreen transparent
+                      scaffoldBackgroundColor: Colors.transparent,
+                      // Customize Buttons to match design language
+                      outlinedButtonTheme: OutlinedButtonThemeData(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.white.withValues(alpha: 0.05),
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(kAppCornerRadius),
+                          ),
+                        ),
+                      ),
+                      elevatedButtonTheme: ElevatedButtonThemeData(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(kAppCornerRadius),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
                       inputDecorationTheme: InputDecorationTheme(
                         filled: true,
                         fillColor: Colors.white.withValues(alpha: 0.05),
@@ -120,11 +145,46 @@ class AuthPage extends StatelessWidget {
                           borderRadius: BorderRadius.circular(kAppCornerRadius), // Using global constant
                           borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                         ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(kAppCornerRadius),
+                          borderSide: const BorderSide(color: Colors.redAccent),
+                        ),
+                        labelStyle: const TextStyle(color: Colors.white70),
                       ),
                     ),
                     child: SignInScreen(
                       providers: [
                         EmailAuthProvider(),
+                      ],
+                      actions: [
+                        ForgotPasswordAction((context, email) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ForgotPasswordScreen(),
+                            ),
+                          );
+                        }),
+                        AuthStateChangeAction<SignedIn>((context, state) {
+                          if (!state.user!.emailVerified) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => EmailVerificationScreen(
+                                  actions: [
+                                    EmailVerifiedAction(() {
+                                      Navigator.pop(context);
+                                    }),
+                                    AuthCancelledAction((context) {
+                                      FirebaseUIAuth.signOut(context: context);
+                                      Navigator.pop(context);
+                                    }),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                        }),
                       ],
                       subtitleBuilder: (context, action) {
                         return Padding(
@@ -134,6 +194,69 @@ class AuthPage extends StatelessWidget {
                                 ? 'Welcome back!'
                                 : 'Join the community of CS students.',
                             style: const TextStyle(color: Colors.grey),
+                          ),
+                        );
+                      },
+                      footerBuilder: (context, action) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 24.0),
+                          child: Column(
+                            children: [
+                              const Row(
+                                children: [
+                                  Expanded(child: Divider(color: Colors.white24)),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(horizontal: 16),
+                                    child: Text("OR", style: TextStyle(color: Colors.white54)),
+                                  ),
+                                  Expanded(child: Divider(color: Colors.white24)),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: () async {
+                                    try {
+                                      final provider = GoogleAuthProvider();
+                                      provider.setCustomParameters({'prompt': 'select_account'});
+                                      
+                                      if (kIsWeb) {
+                                        await FirebaseAuth.instance.signInWithPopup(provider);
+                                      } else {
+                                        await FirebaseAuth.instance.signInWithProvider(provider);
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text("Sign in failed: $e"),
+                                            backgroundColor: Colors.redAccent,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                    side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(kAppCornerRadius),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      // Simple G icon since we don't have assets
+                                      Text("G", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)), 
+                                      SizedBox(width: 12),
+                                      Text("Sign in with Google", style: TextStyle(color: Colors.white, fontSize: 16)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         );
                       },

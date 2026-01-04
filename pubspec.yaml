@@ -18,6 +18,11 @@ dependencies:
   firebase_ui_auth: ^3.0.1
   firebase_storage: ^13.0.5
   image_picker: ^1.2.1
+  supabase_flutter: ^2.5.0  # Latest
+  file_picker: ^8.1.2      # For web image select
+  uuid: ^4.5.1             # Unique paths
+  crypto: ^3.0.5           # For Firebase token handling
+  firebase_ui_oauth_google: ^2.0.1
 
 dev_dependencies:
   flutter_test:

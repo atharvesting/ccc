@@ -13,6 +13,7 @@ import 'pages/search_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/admin_page.dart'; // Added import
 import 'pages/create_post_page.dart'; // For CreatePostDialog
+// For TopNotification
 
 // ============================================
 // UNIFIED DESIGN SYSTEM
@@ -275,9 +276,7 @@ class _PostWidgetState extends State<PostWidget> {
         setState(() {
           _isSaved = !_isSaved;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: ${e.toString()}"), duration: const Duration(seconds: 2)),
-        );
+        showTopNotification(context, "Error: ${e.toString()}", isError: true);
       }
     } finally {
       if (mounted) {
@@ -573,76 +572,96 @@ class GlobalScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
       extendBody: true, // Allows body to extend behind the bottom bar
-      appBar: AppBar(
-        toolbarHeight: 60, // Increased height for floating effect
-        title: Container(
-          margin: const EdgeInsets.only(top: 10), // Push down from status bar
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(50),
-            // border: Border.all(color: Colors.white.withValues(alpha: 0.3), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 15,
-                offset: const Offset(0, 5),
+      body: Stack(
+        children: [
+          body, // The page content
+          
+          // Custom Floating Header
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: SizedBox(
+                height: 60,
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none, // Allow shadows to overflow
+                  children: [
+                    // Title
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(50),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                      child: Text(
+                        '< < <',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          shadows: kAppTitleShadows,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                    
+                    // Actions
+                    Positioned(
+                      right: 8,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FutureBuilder<bool>(
+                            future: DatabaseService().isAdmin(currentUser.id),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData && snapshot.data == true) {
+                                return IconButton(
+                                  icon: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white),
+                                  tooltip: 'Admin Console',
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (context) => const AdminPage()),
+                                    );
+                                  },
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.logout, color: Colors.white),
+                            tooltip: 'Logout',
+                            onPressed: () async {
+                              await FirebaseAuth.instance.signOut();
+                              if (context.mounted) {
+                                 Navigator.of(context).pushAndRemoveUntil(
+                                    MaterialPageRoute(builder: (context) => const AuthPage()), 
+                                    (route) => false
+                                  );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-          child: Text(
-            '< < <',
-            style: TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.bold,
-              shadows: kAppTitleShadows,
-              height: 1.1, // Fix vertical alignment
             ),
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        scrolledUnderElevation: 0,
-        // elevation: 0,
-        foregroundColor: Colors.white,
-        actions: [
-          // Admin Button Logic
-          FutureBuilder<bool>(
-            future: DatabaseService().isAdmin(currentUser.id),
-            builder: (context, snapshot) {
-              if (snapshot.hasData && snapshot.data == true) {
-                return IconButton(
-                  icon: const Icon(Icons.admin_panel_settings_rounded),
-                  tooltip: 'Admin Console',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const AdminPage()),
-                    );
-                  },
-                );
-              }
-              return const SizedBox.shrink();
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: 'Logout',
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (context.mounted) {
-                 Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const AuthPage()), 
-                    (route) => false
-                 );
-              }
-            },
           ),
         ],
       ),
-      body: body,
       floatingActionButton: floatingActionButton,
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
@@ -889,5 +908,142 @@ class AppActionButton extends StatelessWidget {
       return SizedBox(width: double.infinity, child: button);
     }
     return button;
+  }
+}
+
+// --- Helper for Top Notification ---
+
+void showTopNotification(BuildContext context, String message, {bool isError = false}) {
+  late OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (context) => TopNotification(
+      message: message,
+      isError: isError,
+      onDismiss: () => entry.remove(),
+    ),
+  );
+  Overlay.of(context).insert(entry);
+}
+
+class TopNotification extends StatefulWidget {
+  final String message;
+  final bool isError;
+  final VoidCallback onDismiss;
+
+  const TopNotification({
+    super.key, 
+    required this.message, 
+    required this.onDismiss,
+    this.isError = false,
+  });
+
+  @override
+  State<TopNotification> createState() => _TopNotificationState();
+}
+
+class _TopNotificationState extends State<TopNotification> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _offsetAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0.0, -2.0), // Start further up
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.elasticOut, // Bouncy effect
+      reverseCurve: Curves.easeInBack,
+    ));
+
+    _controller.forward();
+
+    Future.delayed(const Duration(seconds: 4), () async {
+      if (mounted) {
+        await _controller.reverse();
+        widget.onDismiss();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.isError ? Colors.redAccent : Colors.greenAccent;
+    
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        child: SlideTransition(
+          position: _offsetAnimation,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A1A).withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(50), // Pill shape
+                    border: Border.all(color: color.withValues(alpha: 0.5)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      )
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          widget.isError ? Icons.priority_high : Icons.check, 
+                          color: Colors.black, 
+                          size: 16
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.message,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

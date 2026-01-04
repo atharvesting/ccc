@@ -62,7 +62,12 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
 
   Future<void> _pickImage() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80, // Compress image to reduce upload size
+        maxWidth: 1024,   // Resize large images to max 1024px width
+      );
+      
       if (image != null) {
         final bytes = await image.readAsBytes();
         setState(() {
@@ -71,6 +76,9 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
       }
     } catch (e) {
       print("Error picking image: $e");
+      if (mounted) {
+        showTopNotification(context, "Failed to pick image", isError: true);
+      }
     }
   }
 
@@ -113,13 +121,20 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
     // Upload new images (if any)
     List<String> uploadedImageUrls = [];
     try {
+      // Note: Ensure your Supabase bucket 'images' is set to PUBLIC.
+      // Otherwise, these URLs will not be viewable by users.
       for (var bytes in _selectedImageBytes) {
         String url = await DatabaseService().uploadImage(bytes, 'post_images');
         uploadedImageUrls.add(url);
       }
     } catch (e) {
+      print("Upload Error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error uploading images: $e")));
+        String errorMessage = "Error uploading images";
+        if (e.toString().contains("403") || e.toString().contains("security policy")) {
+          errorMessage = "Permission denied. Please run the SQL script in supabase_setup.sql";
+        }
+        showTopNotification(context, errorMessage, isError: true);
         setState(() => _isSubmitting = false);
       }
       return;
@@ -150,9 +165,7 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error updating post: $e")),
-          );
+          showTopNotification(context, "Error updating post: $e", isError: true);
           setState(() => _isSubmitting = false);
         }
       }
@@ -177,9 +190,7 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error creating post: $e")),
-          );
+          showTopNotification(context, "Error creating post: $e", isError: true);
           setState(() => _isSubmitting = false);
         }
       }
