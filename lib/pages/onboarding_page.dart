@@ -66,6 +66,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
 
+    // Validate Semester is a number
+    if (int.tryParse(_semesterController.text.trim()) == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Semester must be a valid number')));
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final username = _usernameController.text.trim();
@@ -125,9 +131,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool required = false}) {
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool required = false, TextInputType? keyboardType}) {
     return TextField(
       controller: controller,
+      keyboardType: keyboardType, // Added keyboardType parameter
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: required ? '$label *' : label,
@@ -247,15 +254,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
                           if (isWide)
                             Row(
                               children: [
-                                Expanded(child: _buildTextField(_semesterController, "Semester", Icons.school, required: true)),
+                                Expanded(child: _buildTextField(_semesterController, "Semester", Icons.school, required: true, keyboardType: TextInputType.number)),
                                 const SizedBox(width: 16),
-                                Expanded(child: _buildTextField(_phoneController, "Phone", Icons.phone)),
+                                Expanded(child: _buildTextField(_phoneController, "Phone", Icons.phone, keyboardType: TextInputType.phone)),
                               ],
                             )
                           else ...[
-                            _buildTextField(_semesterController, "Semester", Icons.school, required: true),
+                            _buildTextField(_semesterController, "Semester", Icons.school, required: true, keyboardType: TextInputType.number),
                             const SizedBox(height: 16),
-                            _buildTextField(_phoneController, "Phone", Icons.phone),
+                            _buildTextField(_phoneController, "Phone", Icons.phone, keyboardType: TextInputType.phone),
                           ],
                           const SizedBox(height: 16),
 

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // Changed import
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart'; // Added for debugPrint
+// import 'dart:typed_data';
 import '../models.dart';
 
 class DatabaseService {
@@ -33,7 +34,7 @@ class DatabaseService {
         return _cachedAdminUid == uid;
       }
     } catch (e) {
-      print("Error checking admin status: $e");
+      debugPrint("Error checking admin status: $e");
     }
     
     // Fallback to hardcoded admin
@@ -50,6 +51,21 @@ class DatabaseService {
     // Invalidate cache
     _cachedAdminUid = newAdminUid;
     _cacheTimestamp = DateTime.now();
+  }
+
+  // Real implementation needing UID
+  Future<void> claimAdmin(String uid) async {
+      // 1. Check if doc exists (Client check)
+      final doc = await _db.collection('metadata').doc('admin').get();
+      if (!doc.exists) {
+        // 2. Try to create it
+        await _db.collection('metadata').doc('admin').set({'uid': uid});
+        // 3. Update Cache
+        _cachedAdminUid = uid;
+        _cacheTimestamp = DateTime.now();
+      } else {
+        throw Exception("Admin already exists.");
+      }
   }
 
   // --- Storage ---
@@ -254,7 +270,7 @@ class DatabaseService {
       stats['communities'] = communitiesCount;
       stats['events'] = eventsCount;
     } catch (e) {
-      print("Error getting database stats: $e");
+      debugPrint("Error getting database stats: $e");
     }
     
     return stats;
@@ -314,7 +330,7 @@ class DatabaseService {
         return UserProfile.fromMap(uid, doc.data()!);
       }
     } catch (e) {
-      print("Error fetching profile: $e");
+      debugPrint("Error fetching profile: $e");
     }
     return null;
   }
@@ -323,6 +339,20 @@ class DatabaseService {
     return _db.collection('users').doc(uid).snapshots().map((doc) {
       return UserProfile.fromMap(doc.id, doc.data()!);
     });
+  }
+
+  // --- Config / App Rules ---
+
+  Future<bool> getOnePostPerDayRule() async {
+    return false; // HARDCODED DISABLE
+  }
+
+  Future<void> updateOnePostPerDayRule(bool value) async {
+    // using set with merge to ensure document creation if it doesn't exist
+    await _db.collection('config').doc('posting_rules').set(
+      {'onePostPerDay': value}, 
+      SetOptions(merge: true)
+    );
   }
 
   // --- Social Features ---
@@ -475,29 +505,54 @@ class DatabaseService {
   }
 
   // Scalable Pagination: Following Feed
-  // Note: Firestore 'whereIn' is limited to 30 values. 
-  // For production with >30 following, you need a different strategy (e.g. Fan-out).
+  // NOTE: Changed to "Fan-out on Read" to avoid Firestore Composite Index requirements during development.
+  // This performs individual queries for each followed user (max 10) and merges results.
+  // This ensures posts appear immediately without manual index creation in Firebase Console.
   Future<List<Post>> getFollowingPosts(List<String> followingIds, {int limit = 10, Post? lastPost}) async {
     if (followingIds.isEmpty) return [];
 
-    // Take first 10 to be safe with Firestore limits (limit is 30 for 'in', but 10 is safer for complex queries)
+    // Limit to 10 followed users for performance in this "Fan-out" approach
     final safeIds = followingIds.take(10).toList();
 
     try {
-      var query = _db
-          .collection('posts')
-          .where('userId', whereIn: safeIds)
-          .orderBy('timestamp', descending: true)
-          .limit(limit);
+      List<Future<QuerySnapshot>> futures = [];
 
-      if (lastPost != null) {
-        query = query.startAfter([lastPost.timestamp]);
+      for (String userId in safeIds) {
+        // Query posts for ONE user. This uses default single-field indexes.
+        var query = _db
+            .collection('posts')
+            .where('userId', isEqualTo: userId)
+            .orderBy('timestamp', descending: true)
+            .limit(limit);
+
+        if (lastPost != null) {
+          query = query.startAfter([lastPost.timestamp]);
+        }
+        
+        futures.add(query.get());
       }
 
-      final snapshot = await query.get();
-      return snapshot.docs.map((doc) => Post.fromMap(doc.id, doc.data())).toList();
+      // Execute all queries in parallel
+      final List<QuerySnapshot> snapshots = await Future.wait(futures);
+      
+      List<Post> allPosts = [];
+      for (var snap in snapshots) {
+        for (var doc in snap.docs) {
+          allPosts.add(Post.fromMap(doc.id, doc.data() as Map<String, dynamic>));
+        }
+      }
+
+      // Merge and Sort
+      allPosts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      // Limit result
+      if (allPosts.length > limit) {
+        allPosts = allPosts.sublist(0, limit);
+      }
+
+      return allPosts;
     } catch (e) {
-      print("Error fetching following posts: $e");
+      debugPrint("Error fetching following posts: $e");
       return [];
     }
   }
@@ -592,7 +647,7 @@ class DatabaseService {
 
       return uniqueUsers.values.toList();
     } catch (e) {
-      print("Search Error: $e");
+      debugPrint("Search Error: $e");
       return [];
     }
   }

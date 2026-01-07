@@ -13,6 +13,7 @@ import 'pages/search_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/admin_page.dart'; // Added import
 import 'pages/create_post_page.dart'; // For CreatePostDialog
+import 'pages/about_popup.dart'; // Added import
 // For TopNotification
 
 // ============================================
@@ -75,6 +76,46 @@ final List<Shadow> kAppTitleShadows = [
     offset: const Offset(0, 0),
   ),
 ];
+
+// REUSABLE LOGO WIDGET
+class AppLogo extends StatelessWidget {
+  final double fontSize;
+  final EdgeInsetsGeometry padding;
+
+  const AppLogo({
+    super.key, 
+    this.fontSize = 36,
+    this.padding = const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(50),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.5),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      padding: padding,
+      child: Text(
+        '< < <',
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          shadows: kAppTitleShadows,
+          height: 1.1,
+        ),
+      ),
+    );
+  }
+}
 
 // Helper for Tag Colors
 Color getTagColor(String tag) {
@@ -506,12 +547,14 @@ class GlobalScaffold extends StatelessWidget {
   final Widget body;
   final Widget? floatingActionButton;
   final int selectedIndex;
+  final VoidCallback? onAdminClosed; // Added callback
 
   const GlobalScaffold({
     super.key,
     required this.body,
     this.floatingActionButton,
     required this.selectedIndex,
+    this.onAdminClosed, // Initialize
   });
 
   void _onItemTapped(BuildContext context, int index) {
@@ -590,28 +633,38 @@ class GlobalScaffold extends StatelessWidget {
                   clipBehavior: Clip.none, // Allow shadows to overflow
                   children: [
                     // Title
-                    Container(
-                      margin: const EdgeInsets.only(top: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(50),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 15,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-                      child: Text(
-                        '< < <',
-                        style: TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          shadows: kAppTitleShadows,
-                          height: 1.1,
-                        ),
+                    GestureDetector(
+                      onTap: () {
+                        showGeneralDialog(
+                          context: context,
+                          barrierDismissible: true,
+                          barrierLabel: 'Close',
+                          barrierColor: Colors.black.withValues(alpha: 0.8),
+                          transitionDuration: const Duration(milliseconds: 300),
+                          pageBuilder: (_, _, _) => const AboutPopup(),
+                          transitionBuilder: (context, animation, secondaryAnimation, child) {
+                            return BackdropFilter(
+                              filter: ImageFilter.blur(
+                                sigmaX: 5 * animation.value,
+                                sigmaY: 5 * animation.value,
+                              ),
+                              child: FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: CurvedAnimation(
+                                    parent: animation,
+                                    curve: Curves.easeOutBack,
+                                  ),
+                                  child: child,
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 10),
+                        child: const AppLogo(),
                       ),
                     ),
                     
@@ -628,11 +681,17 @@ class GlobalScaffold extends StatelessWidget {
                                 return IconButton(
                                   icon: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white),
                                   tooltip: 'Admin Console',
-                                  onPressed: () {
-                                    Navigator.push(
+                                  onPressed: () async {
+                                    // Await the return from AdminPage
+                                    await Navigator.push(
                                       context,
                                       MaterialPageRoute(builder: (context) => const AdminPage()),
                                     );
+                                    
+                                    // Trigger callback to refresh parent page if provided
+                                    if (onAdminClosed != null) {
+                                      onAdminClosed!();
+                                    }
                                   },
                                 );
                               }

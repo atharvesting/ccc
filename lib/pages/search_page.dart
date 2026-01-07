@@ -1,4 +1,5 @@
 import 'dart:async';
+// import 'package:flutter/foundation.dart'; // Added for debugPrint
 import 'package:flutter/material.dart';
 import '../models.dart';
 import '../services/database_service.dart';
@@ -60,7 +61,7 @@ class _SearchPageState extends State<SearchPage> {
 
       setState(() => _results = users);
     } catch (e) {
-      print("Search Error: $e"); // Log error for debugging
+      debugPrint("Search error: $e");
     } finally {
       // Only stop loading if this is still the active query
       if (mounted && _currentQuery == query) {

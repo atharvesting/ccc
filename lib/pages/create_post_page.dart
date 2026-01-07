@@ -1,6 +1,7 @@
+// import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart'; // Added for debugPrint
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart'; // Added import
-import 'dart:typed_data'; // Added import
 import '../models.dart';
 import '../data.dart';
 import '../widgets.dart';
@@ -75,10 +76,7 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
         });
       }
     } catch (e) {
-      print("Error picking image: $e");
-      if (mounted) {
-        showTopNotification(context, "Failed to pick image", isError: true);
-      }
+      debugPrint("Error picking image: $e");
     }
   }
 
@@ -128,7 +126,7 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
         uploadedImageUrls.add(url);
       }
     } catch (e) {
-      print("Upload Error: $e");
+      debugPrint("Upload Error: $e");
       if (mounted) {
         String errorMessage = "Error uploading images";
         if (e.toString().contains("403") || e.toString().contains("security policy")) {
@@ -185,14 +183,15 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
 
       try {
         await DatabaseService().createPost(newPost);
+        if (mounted) Navigator.pop(context, true); // Return success
+      } catch (e, stack) {
+        debugPrint("Error creating post: $e\n$stack");
         if (mounted) {
-          Navigator.pop(context, true); // Return true to indicate success
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent),
+          );
         }
-      } catch (e) {
-        if (mounted) {
-          showTopNotification(context, "Error creating post: $e", isError: true);
-          setState(() => _isSubmitting = false);
-        }
+        setState(() => _isSubmitting = false);
       }
     }
   }

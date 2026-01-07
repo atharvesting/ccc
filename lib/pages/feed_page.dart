@@ -38,11 +38,14 @@ class _FeedPageState extends State<FeedPage> {
         defaultTargetPlatform == TargetPlatform.linux; // non‑web desktop
   }
 
-  // Helper to check if posted today
+  // Helper to check if posted today (Using UTC to match Firestore Rules)
   bool _hasPostedToday(DateTime? date) {
     if (date == null) return false;
-    final now = DateTime.now();
-    return date.year == now.year && date.month == now.month && date.day == now.day;
+    final nowUtc = DateTime.now().toUtc();
+    final postDateUtc = date.toUtc();
+    return postDateUtc.year == nowUtc.year && 
+           postDateUtc.month == nowUtc.month && 
+           postDateUtc.day == nowUtc.day;
   }
 
   @override
@@ -103,6 +106,12 @@ class _FeedPageState extends State<FeedPage> {
   Widget build(BuildContext context) { // Removed Future and async
     return GlobalScaffold(
       selectedIndex: 0,
+       // Check for updates when Admin page closes (e.g. Announcements posted)
+      onAdminClosed: () {
+        setState(() {
+          _refreshCounter++;
+        });
+      },
       body: Stack(
         children: [
           // 1. Background Gradient
@@ -155,7 +164,10 @@ class _FeedPageState extends State<FeedPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     child: GestureDetector(
                       onTap: () async {
-                        // 1. Check Posting Limit
+                        // 1. Fetch Global Rules
+                        final onePostLimit = await DatabaseService().getOnePostPerDayRule();
+
+                        // 2. Check Posting Limit
                         // Fetch latest profile to ensure we have the latest lastPostDate
                         // (e.g. if user posted in a community recently)
                         final latestProfile = await DatabaseService().getUserProfile(currentUser.id);
@@ -163,7 +175,7 @@ class _FeedPageState extends State<FeedPage> {
                           currentUser = latestProfile;
                         }
 
-                        if (_hasPostedToday(currentUser.lastPostDate)) {
+                        if (onePostLimit && _hasPostedToday(currentUser.lastPostDate)) {
                           if (mounted) {
                             showTopNotification(context, "Daily limit reached! You can post again tomorrow.", isError: true);
                           }
@@ -234,32 +246,46 @@ class _FeedPageState extends State<FeedPage> {
 
                   // Feed List
                   Expanded(
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 400),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (Widget child, Animation<double> animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: _slideTween.animate(animation), // Use static tween
-                            child: child,
-                          ),
+                    child: StreamBuilder<UserProfile>(
+                      stream: DatabaseService().getUserProfileStream(currentUser.id),
+                      builder: (context, snapshot) {
+                        // Use latest profile data if available, or fallback to global currentUser
+                        final userProfile = snapshot.data ?? currentUser;
+                        
+                        // Sync global state for other parts of the app
+                        if (snapshot.hasData) {
+                          currentUser = snapshot.data!;
+                        }
+
+                        return AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 400),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          transitionBuilder: (Widget child, Animation<double> animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: _slideTween.animate(animation), // Use static tween
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: _selectedIndex == 0
+                              ? PaginatedFeedList(
+                                  key: ValueKey('global_$_refreshCounter'), // Update key to force refresh
+                                  fetchFunction: (lastPost) => DatabaseService().getGlobalPosts(limit: 9, lastPost: lastPost),
+                                  emptyMessage: "No updates yet. Be the first!",
+                                  pageSize: 9, // Pass the correct limit
+                                )
+                              : PaginatedFeedList(
+                                  // Update key when following list content changes (by string representation)
+                                  key: ValueKey('following_${userProfile.following.toString()}_$_refreshCounter'), 
+                                  fetchFunction: (lastPost) => DatabaseService().getFollowingPosts(userProfile.following, limit: 8, lastPost: lastPost),
+                                  emptyMessage: "You aren't following anyone yet, or they haven't posted.",
+                                  pageSize: 8, // Pass the correct limit
+                                ),
                         );
-                      },
-                      child: _selectedIndex == 0
-                          ? PaginatedFeedList(
-                              key: ValueKey('global_$_refreshCounter'), // Update key to force refresh
-                              fetchFunction: (lastPost) => DatabaseService().getGlobalPosts(limit: 9, lastPost: lastPost),
-                              emptyMessage: "No updates yet. Be the first!",
-                              pageSize: 9, // Pass the correct limit
-                            )
-                          : PaginatedFeedList(
-                              key: ValueKey('following_$_refreshCounter'), // Update key to force refresh
-                              fetchFunction: (lastPost) => DatabaseService().getFollowingPosts(currentUser.following, limit: 8, lastPost: lastPost),
-                              emptyMessage: "You aren't following anyone yet, or they haven't posted.",
-                              pageSize: 8, // Pass the correct limit
-                            ),
+                      }
                     ),
                   ),
                 ],

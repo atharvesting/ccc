@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+// import 'package:cloud_firestore/cloud_firestore.dart'; // Removed direct import
 import 'dart:ui'; // For ImageFilter
 import '../services/database_service.dart';
 import '../models.dart';
@@ -27,6 +28,57 @@ class _AdminPageState extends State<AdminPage> {
   UserProfile? _selectedAdminUser;
 
   bool _isLoading = false;
+  bool _isOnePostPerDayEnabled = true; // State for rule
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final rule = await DatabaseService().getOnePostPerDayRule();
+    if (mounted) {
+      setState(() {
+        _isOnePostPerDayEnabled = rule;
+      });
+    }
+  }
+
+  Future<void> _togglePostingRule(bool value) async {
+    setState(() => _isLoading = true);
+    try {
+      await DatabaseService().updateOnePostPerDayRule(value);
+      setState(() => _isOnePostPerDayEnabled = value);
+      if (mounted) showTopNotification(context, "Rule Updated: One Post Per Day is now ${value ? 'ON' : 'OFF'}");
+    } catch (e) {
+      // PERMISSION RECOVERY LOGIC
+      if (e.toString().contains("permission-denied")) {
+        try {
+           debugPrint("Permission denied. Attempting to claim admin rights (Bootstrap)...");
+           // Try to self-appoint as admin (Works only if no admin exists in DB yet)
+           await DatabaseService().claimAdmin(currentUser.id);
+           
+           // Retry the operation
+           await DatabaseService().updateOnePostPerDayRule(value);
+           setState(() => _isOnePostPerDayEnabled = value);
+           if (mounted) showTopNotification(context, "Admin Rights Claimed & Rule Updated!");
+           return; // Success on retry
+        } catch (e2) {
+           debugPrint("Bootstrap failed: $e2");
+           // Fall through to error
+        }
+      }
+
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   Future<void> _postAnnouncement() async {
     if (_announcementController.text.trim().isEmpty) return;
@@ -44,13 +96,17 @@ class _AdminPageState extends State<AdminPage> {
       
       await DatabaseService().createAnnouncement(post);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Announcement Posted!")));
+        showTopNotification(context, "Announcement Posted!");
         _announcementController.clear();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -123,7 +179,7 @@ class _AdminPageState extends State<AdminPage> {
     try {
       await DatabaseService().deleteUserAsAdmin(_selectedBanUser!.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("User Deleted")));
+        showTopNotification(context, "User Deleted");
         setState(() {
           _selectedBanUser = null;
           _banSearchController.clear();
@@ -131,9 +187,13 @@ class _AdminPageState extends State<AdminPage> {
         });
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -153,13 +213,17 @@ class _AdminPageState extends State<AdminPage> {
     try {
       await DatabaseService().transferAdminRights(_selectedAdminUser!.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Admin Rights Transferred. Goodbye!")));
+        showTopNotification(context, "Admin Rights Transferred. Goodbye!");
         Navigator.pop(context); // Exit Admin Page
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -169,13 +233,17 @@ class _AdminPageState extends State<AdminPage> {
     try {
       await DatabaseService().deletePostAsAdmin(_postIdController.text.trim());
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Post Deleted")));
+        showTopNotification(context, "Post Deleted");
         _postIdController.clear();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -195,16 +263,16 @@ class _AdminPageState extends State<AdminPage> {
     try {
       final count = await DatabaseService().deleteAllUsers();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Deleted $count users"), backgroundColor: Colors.red),
-        );
+        showTopNotification(context, "Deleted $count users");
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -224,16 +292,16 @@ class _AdminPageState extends State<AdminPage> {
     try {
       final count = await DatabaseService().deleteAllPosts();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Deleted $count posts"), backgroundColor: Colors.red),
-        );
+        showTopNotification(context, "Deleted $count posts");
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -253,16 +321,16 @@ class _AdminPageState extends State<AdminPage> {
     try {
       final count = await DatabaseService().deleteAllCommunities();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Deleted $count communities"), backgroundColor: Colors.red),
-        );
+        showTopNotification(context, "Deleted $count communities");
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -282,16 +350,16 @@ class _AdminPageState extends State<AdminPage> {
     try {
       final count = await DatabaseService().deleteAllEvents();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Deleted $count events"), backgroundColor: Colors.red),
-        );
+        showTopNotification(context, "Deleted $count events");
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        showTopNotification(context, "Error: $e", isError: true);
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -550,7 +618,7 @@ class _AdminPageState extends State<AdminPage> {
 
                         // Section 6: Bulk Delete Operations (DANGER ZONE)
                         _buildSection(
-                          title: "⚠️ DANGER ZONE ⚠️",
+                          title: "DANGER ZONE",
                           icon: Icons.warning,
                           color: Colors.red,
                           children: [
@@ -571,6 +639,28 @@ class _AdminPageState extends State<AdminPage> {
 
                         const SizedBox(height: 24),
 
+                        // Section 6.5: Global Rules (New)
+                        _buildSection(
+                          title: "Global Rules",
+                          icon: Icons.gavel,
+                          color: Colors.purpleAccent,
+                          children: [
+                             SwitchListTile(
+                               title: const Text("One Post Per Day Limit", style: TextStyle(color: Colors.white)),
+                               subtitle: Text(
+                                 _isOnePostPerDayEnabled ? "Users can only post once every 24h" : "No posting limits",
+                                 style: const TextStyle(color: Colors.white54, fontSize: 12),
+                               ),
+                               value: _isOnePostPerDayEnabled,
+                               activeTrackColor: Colors.purpleAccent,
+                               contentPadding: EdgeInsets.zero,
+                               onChanged: _togglePostingRule,
+                             ),
+                          ]
+                        ),
+
+                        const SizedBox(height: 24),
+
                         // Section 7: Utility Operations
                         _buildSection(
                           title: "Utilities",
@@ -584,9 +674,7 @@ class _AdminPageState extends State<AdminPage> {
                               Colors.grey,
                               () {
                                 DatabaseService().clearAdminCache();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("Admin cache cleared"))
-                                );
+                                showTopNotification(context, "Admin cache cleared");
                               },
                             ),
                           ]
@@ -881,6 +969,7 @@ class _DangerConfirmationDialogState extends State<_DangerConfirmationDialog> {
           onPressed: () => Navigator.pop(context, false),
         ),
         TextButton(
+          onPressed: isConfirmed ? () => Navigator.pop(context, true) : null,
           child: Text(
             widget.confirmText,
             style: TextStyle(
@@ -888,7 +977,6 @@ class _DangerConfirmationDialogState extends State<_DangerConfirmationDialog> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          onPressed: isConfirmed ? () => Navigator.pop(context, true) : null,
         ),
       ],
     );
@@ -990,7 +1078,7 @@ class _EditEventRequestDialogState extends State<EditEventRequestDialog> {
 
   Future<void> _approve() async {
     if (_titleController.text.isEmpty || _descController.text.isEmpty || _venueController.text.isEmpty || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all mandatory fields")));
+      showTopNotification(context, "Please fill all mandatory fields", isError: true);
       return;
     }
 
@@ -1015,10 +1103,10 @@ class _EditEventRequestDialogState extends State<EditEventRequestDialog> {
       await DatabaseService().updateEvent(updatedEvent);
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Event Approved & Updated")));
+        showTopNotification(context, "Event Approved & Updated");
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) showTopNotification(context, "Error: $e", isError: true);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -1030,10 +1118,10 @@ class _EditEventRequestDialogState extends State<EditEventRequestDialog> {
       await DatabaseService().deleteEvent(widget.event.id);
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Event Rejected & Deleted")));
+        showTopNotification(context, "Event Rejected & Deleted");
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) showTopNotification(context, "Error: $e", isError: true);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

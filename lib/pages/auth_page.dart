@@ -1,12 +1,87 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb; // Added for platform check
 import 'package:firebase_ui_auth/firebase_ui_auth.dart';
-import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider; // Import for GoogleAuthProvider
+import 'package:firebase_auth/firebase_auth.dart' hide EmailAuthProvider; // Fixed ambiguous import
 import 'dart:ui';
-import '../widgets.dart'; // Import for kAppCornerRadius
+import '../widgets.dart'; 
+import '../services/database_service.dart'; 
+import '../data.dart'; 
+import '../models.dart'; 
+import 'feed_page.dart'; 
+import 'onboarding_page.dart'; 
 
 class AuthPage extends StatelessWidget {
   const AuthPage({super.key});
+
+  Future<void> _handleGuestLogin(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: "guest@ccc.com", 
+        password: "12345678"
+      );
+      
+      if (context.mounted && FirebaseAuth.instance.currentUser != null) {
+        _handleSignIn(context, FirebaseAuth.instance.currentUser!.uid);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showTopNotification(
+          context,
+          "Guest login failed: $e. (Check credentials in auth_page.dart)", 
+          isError: true
+        );
+      }
+    }
+  }
+
+  // Helper to handle navigation logic after sign in
+  Future<void> _handleSignIn(BuildContext context, String uid) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      var profile = await DatabaseService().getUserProfile(uid);
+      
+      if (!context.mounted) return;
+
+      // FIX: Auto-create profile for Guest Judge (so they skip onboarding)
+      // This ensures the "connection" to the database exists immediately
+      if (profile == null && user != null && user.email == "guest@ccc.com") {
+         profile = UserProfile(
+           id: uid,
+           username: 'guest_judge',
+           fullName: 'Guest Judge',
+           bio: 'Visiting for review. Welcome to CCC!',
+           skills: ['Evaluation', 'Feedback'],
+           skillRatings: {'Evaluation': 5, 'Feedback': 5},
+           currentSemester: 8, // Senior / Judge
+           openToCollaborate: false,
+         );
+         // This creates the document in Firestore matching the Auth UID
+         await DatabaseService().createUserProfile(profile);
+      }
+
+      if (profile != null) {
+        // Existing user: Initialize global state and go to feed
+        currentUser = profile;
+        if (context.mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const FeedPage()),
+          );
+        }
+      } else {
+        // New user: Go to onboarding (Normal flow for students)
+        if (context.mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const OnboardingPage()),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showTopNotification(context, "Error accessing account: $e", isError: true);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,40 +128,26 @@ class AuthPage extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
             child: Container(color: Colors.transparent),
           ),
+          
           // 4. Auth Screen Content
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 20),
+                const SizedBox(height: 30), // Increased spacing for top button
                 // Branding Header
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.5), width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.redAccent.withValues(alpha: 0.2),
-                              blurRadius: 20,
-                              spreadRadius: 5,
-                            )
-                          ]
-                        ),
-                        child: const Text("< < <", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                      ),
+                      const AppLogo(fontSize: 24, padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8)),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "collegeCodingCulture",
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              "College Coding Culture",
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                     letterSpacing: 1.1,
@@ -174,6 +235,10 @@ class AuthPage extends StatelessWidget {
                                   actions: [
                                     EmailVerifiedAction(() {
                                       Navigator.pop(context);
+                                      // Proceed only after verification dialog closes
+                                      if (state.user != null) {
+                                        _handleSignIn(context, state.user!.uid);
+                                      }
                                     }),
                                     AuthCancelledAction((context) {
                                       FirebaseUIAuth.signOut(context: context);
@@ -183,6 +248,9 @@ class AuthPage extends StatelessWidget {
                                 ),
                               ),
                             );
+                          } else {
+                            // Valid login -> Navigate to app
+                            _handleSignIn(context, state.user!.uid);
                           }
                         }),
                       ],
@@ -213,29 +281,41 @@ class AuthPage extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 24),
+                              
+                              // Guest Entry Button
+                              SizedBox(
+                                width: double.infinity,
+                                child: TextButton.icon(
+                                  onPressed: () => _handleGuestLogin(context),
+                                  icon: const Icon(Icons.key, color: Colors.white, size: 20),
+                                  label: const Text(
+                                    "GUEST ENTRY", 
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    backgroundColor: Colors.black.withValues(alpha: 0.2), 
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.5)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              
+                              const SizedBox(height: 16),
+                              
+                              // Feature Disabled / Google Button
                               SizedBox(
                                 width: double.infinity,
                                 child: OutlinedButton(
-                                  onPressed: () async {
-                                    try {
-                                      final provider = GoogleAuthProvider();
-                                      provider.setCustomParameters({'prompt': 'select_account'});
-                                      
-                                      if (kIsWeb) {
-                                        await FirebaseAuth.instance.signInWithPopup(provider);
-                                      } else {
-                                        await FirebaseAuth.instance.signInWithProvider(provider);
-                                      }
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text("Sign in failed: $e"),
-                                            backgroundColor: Colors.redAccent,
-                                          ),
-                                        );
-                                      }
-                                    }
+                                  onPressed: () {
+                                    // Removed actual Google Sign-In logic
+                                    showTopNotification(
+                                      context, 
+                                      "This feature is currently in testing phase.",
+                                      isError: true 
+                                    );
                                   },
                                   style: OutlinedButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -248,7 +328,6 @@ class AuthPage extends StatelessWidget {
                                   child: const Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      // Simple G icon since we don't have assets
                                       Text("G", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)), 
                                       SizedBox(width: 12),
                                       Text("Sign in with Google", style: TextStyle(color: Colors.white, fontSize: 16)),
