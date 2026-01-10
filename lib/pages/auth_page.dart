@@ -226,6 +226,33 @@ class AuthPage extends StatelessWidget {
                             ),
                           );
                         }),
+                        // ADDED: Handle registration event explicitly
+                        AuthStateChangeAction<UserCreated>((context, state) {
+                          final user = state.credential.user;
+                          if (user != null) {
+                            if (!user.emailVerified) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => EmailVerificationScreen(
+                                    actions: [
+                                      EmailVerifiedAction(() {
+                                        Navigator.pop(context);
+                                        _handleSignIn(context, user.uid);
+                                      }),
+                                      AuthCancelledAction((context) {
+                                        FirebaseUIAuth.signOut(context: context);
+                                        Navigator.pop(context);
+                                      }),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            } else {
+                              _handleSignIn(context, user.uid);
+                            }
+                          }
+                        }),
                         AuthStateChangeAction<SignedIn>((context, state) {
                           if (!state.user!.emailVerified) {
                             Navigator.push(

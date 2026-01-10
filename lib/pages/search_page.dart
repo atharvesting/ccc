@@ -99,6 +99,7 @@ class _SearchPageState extends State<SearchPage> {
                       // color: Colors.white.withValues(alpha: 0.1),
                       child: TextField(
                         controller: _searchController,
+                        keyboardType: TextInputType.multiline,
                         autofocus: true,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(

@@ -326,8 +326,17 @@ class DatabaseService {
   Future<UserProfile?> getUserProfile(String uid) async {
     try {
       var doc = await _db.collection('users').doc(uid).get();
-      if (doc.exists) {
-        return UserProfile.fromMap(uid, doc.data()!);
+      // Check if doc exists first
+      if (doc.exists && doc.data() != null) {
+        try {
+           // Try to parse. If this fails due to model mismatch, it catches below.
+           return UserProfile.fromMap(uid, doc.data()!);
+        } catch (e) {
+           debugPrint("CRITICAL: User doc exists but parsing failed: $e");
+           // Returning null here causes AuthPage to redirect to Onboarding, 
+           // which allows the user to 'repair' their profile by overwriting it.
+           return null;
+        }
       }
     } catch (e) {
       debugPrint("Error fetching profile: $e");

@@ -246,13 +246,16 @@ class _CreatePostDialogState extends State<CreatePostDialog> {
                         children: [
                           TextField(
                             controller: _contentController,
-                            maxLines: 5,
+                            maxLines: 7,
+                            keyboardType: TextInputType.multiline, // Added: Helps browser optimization on web
                             style: const TextStyle(color: Colors.white),
                             cursorColor: themeColor,
                             decoration: const InputDecoration(
                               hintText: "What did you learn or build today?",
                               hintStyle: TextStyle(color: Colors.white30),
                               border: InputBorder.none,
+                              alignLabelWithHint: true, // Added: Fixes double-render glitch on Web for multiline fields
+                              hintMaxLines: 5, // Added: Ensures hint behaves consistently with input area
                             ),
                           ),
                           const SizedBox(height: 10),

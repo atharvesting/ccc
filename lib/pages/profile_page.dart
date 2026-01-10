@@ -168,6 +168,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
             width: 800,
             child: TextField(
               controller: _bioController,
+              keyboardType: TextInputType.multiline,
               maxLength: 250,
               maxLines: 10,
               minLines: 5,
@@ -441,7 +442,7 @@ class _ProfilePageState extends State<ProfilePage> { // Removed SingleTickerProv
                                       const CircleAvatar(
                                         radius: 60,
                                         backgroundColor: Colors.redAccent,
-                                        child: Icon(Icons.person_4, size: 40, color: Colors.white),
+                                        child: Icon(Icons.person_4, size: 60, color: Colors.white),
                                       ),
                                       const SizedBox(height: 16),
                                       _isEditing

@@ -117,10 +117,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
         // FIX: Navigate to FeedPage after success
         if (mounted) {
-          Navigator.of(context).pushReplacement(
+          Navigator.pushReplacement(
+            context,
             MaterialPageRoute(builder: (context) => const FeedPage()),
           );
         }
+      } else {
+         // Should not happen, but safe to handle
+         if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Authentication error. Please sign in again.')));
+         }
       }
     } catch (e) {
       if (mounted) { // Added mounted check

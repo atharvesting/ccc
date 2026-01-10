@@ -747,11 +747,11 @@ class GlobalScaffold extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildNavItem(context, Icons.home_outlined, Icons.home, 0),
-                    _buildNavItem(context, Icons.groups_2, Icons.groups, 1),
+                    _buildNavItem(context, Icons.groups_2_outlined, Icons.groups_2, 1),
                     _buildNavItem(context, Icons.event_note_outlined, Icons.event_note, 2),
-                    _buildNavItem(context, Icons.hub, Icons.hub, 3),
-                    _buildNavItem(context, Icons.search, Icons.search, 4),
-                    _buildNavItem(context, Icons.person_3, Icons.person, 5),
+                    _buildNavItem(context, Icons.hub_outlined, Icons.hub, 3),
+                    _buildNavItem(context, Icons.search_outlined, Icons.search, 4),
+                    _buildNavItem(context, Icons.person_3_outlined, Icons.person_3, 5),
                   ],
                 ),
               ),
@@ -774,7 +774,7 @@ class GlobalScaffold extends StatelessWidget {
         child: Icon(
           isSelected ? selectedIcon : icon,
           color: isSelected ? Colors.redAccent : Colors.white70,
-          size: 26,
+          size: 30,
         ),
       ),
     );
